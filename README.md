@@ -4,7 +4,7 @@ For each solved RNA-seq sample, the dashboard lists the seqr-tagged variants and
 RNA-seq data supports them: FRASER2 splicing outliers in the solved gene, and the gene's expression
 (TPM) against the tissue cohort.
 
-**Site:** https://broadinstitute.github.io/rnaseq-dashboard/
+**Site:** https://broadinstitute.github.io/tgg-rnaseq-dashboard/
 
 ## Using the dashboard
 
