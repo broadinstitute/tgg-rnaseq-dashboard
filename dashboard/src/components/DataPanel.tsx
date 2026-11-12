@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { KIND_LABELS, PER_TISSUE_KINDS, REQUIRED_KINDS, type InputKind } from "../data/detect";
+import { ALL_TISSUES, KIND_LABELS, PER_TISSUE_KINDS, REQUIRED_KINDS, type InputKind } from "../data/detect";
 import type { GsObject } from "../data/gcs";
 
 /** A file the user dropped, already read and recognised. */
@@ -140,7 +140,8 @@ export default function DataPanel(p: Props) {
         )}
       </div>
       <datalist id="tissue-options">
-        {p.tissueSuggestions.map((t) => <option key={t} value={t} />)}
+        <option value={ALL_TISSUES}>all tissues (rows split by each sample's tissue)</option>
+        {p.tissueSuggestions.filter((t) => t !== ALL_TISSUES).map((t) => <option key={t} value={t} />)}
       </datalist>
 
       {/* readiness: one line, only once there is something to judge (bucket listed or a file dropped) */}
@@ -168,15 +169,18 @@ export default function DataPanel(p: Props) {
 /** Per tissue, whether a FRASER2 table and a TPM matrix are present (from bucket or dropped files). */
 function tissueStatus(...sets: Set<string>[]): { tissue: string; fraser: boolean; tpm: boolean }[] {
   const byTissue = new Map<string, { tissue: string; fraser: boolean; tpm: boolean }>();
+  let fraserAll = false;
   for (const s of sets) {
     for (const k of s) {
       const [kind, tissue] = k.split(":");
       if (!tissue) continue;
+      if (tissue === ALL_TISSUES) { if (kind === "fraser") fraserAll = true; continue; }
       const t = byTissue.get(tissue) ?? { tissue, fraser: false, tpm: false };
       if (kind === "fraser") t.fraser = true;
       if (kind === "tpm") t.tpm = true;
       byTissue.set(tissue, t);
     }
   }
+  if (fraserAll) for (const t of byTissue.values()) t.fraser = true;   // one combined table covers every tissue
   return [...byTissue.values()].sort((a, b) => a.tissue.localeCompare(b.tissue));
 }

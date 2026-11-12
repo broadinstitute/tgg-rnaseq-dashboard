@@ -29,6 +29,7 @@ describe("detectKind", () => {
     expect(classifyReleaseFile("releases/11_12_2026/results.csv")).toEqual({ kind: "fraser", tissue: null });
     expect(classifyReleaseFile("releases/11_12_2026/all_variants.csv")).toEqual({ kind: "allVariants", tissue: null });
     expect(classifyReleaseFile("releases/11_12_2026/README.md")).toBeNull();
+    expect(classifyReleaseFile("releases/11_12_2026/solved_table_muscle_padj0.05.csv")).toBeNull();
   });
 
   it("classifies bucket objects by name", () => {

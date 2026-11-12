@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { composeSvg, downloadPng, downloadSvg } from "../data/exportSvg";
 import type { Selection, SolvedRow } from "../types";
 
 /** Horizontal stacked bars, one panel per tissue on a shared scale: per seqr consequence class, how many
@@ -55,7 +56,22 @@ interface Props {
   onSelect: (s: Selection | null) => void;
 }
 
+const TITLE = "RNA support by variant consequence";
+
 export default function ConsequenceBar({ rows, width = 720, selection, onSelect }: Props) {
+  const card = useRef<HTMLElement>(null);
+  const exportChart = async (format: "svg" | "png") => {
+    const svgs = Array.from(card.current?.querySelectorAll<SVGSVGElement>("svg.panel") ?? []);
+    if (!svgs.length) return;
+    const tissues = panels.map((p) => p.tissue);
+    const name = `rna_support_by_consequence_${tissues.length === 1 ? tissues[0] : "all_tissues"}`;
+    const text = composeSvg(svgs, TITLE, [
+      { color: ACCENT, label: "FRASER2 outlier in solved gene" },
+      { color: MUTED, label: "no outlier" },
+    ]);
+    if (format === "svg") downloadSvg(text, `${name}.svg`);
+    else await downloadPng(text, `${name}.png`);
+  };
   const panels = useMemo(() => {
     const tissues = [...new Set(rows.map((r) => r.Tissue))].sort();
     return tissues.map((t) => ({ tissue: t, data: consequenceCounts(rows.filter((r) => r.Tissue === t)) }));
@@ -64,8 +80,14 @@ export default function ConsequenceBar({ rows, width = 720, selection, onSelect 
   if (!panels.length) return null;
 
   return (
-    <section className="card">
-      <h2 style={{ margin: 0 }}>RNA support by variant consequence</h2>
+    <section className="card" ref={card}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h2 style={{ margin: 0 }}>{TITLE}</h2>
+        <div className="row">
+          <button onClick={() => exportChart("svg")} title="Vector image, editable in Illustrator / Inkscape">Download SVG</button>
+          <button onClick={() => exportChart("png")} title="Image at 2× resolution">Download PNG</button>
+        </div>
+      </div>
       <div className="row small" style={{ gap: 18, margin: "8px 0 4px" }}>
         <span><span className="swatch" style={{ background: ACCENT }} /> FRASER2 outlier in solved gene</span>
         <span><span className="swatch" style={{ background: MUTED }} /> no outlier</span>
@@ -95,7 +117,7 @@ function Panel({ tissue, data, max, width, selection, onSelect }: {
 
   return (
       <div ref={wrap} style={{ position: "relative" }}>
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: "100%", height: "auto" }} role="img" aria-label={`${tissue}: solved variants by consequence class, split by FRASER2 outlier in the solved gene`}>
+        <svg className="panel" width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: "100%", height: "auto" }} role="img" aria-label={`${tissue}: solved variants by consequence class, split by FRASER2 outlier in the solved gene`}>
           <text x={0} y={16} fontSize={13} fontWeight={600} fill={INK}>{tissue}</text>
           {/* gridlines + ticks */}
           {ticks.map((t) => (

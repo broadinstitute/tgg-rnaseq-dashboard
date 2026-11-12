@@ -8,7 +8,7 @@ import TissueSelect from "./components/TissueSelect";
 import { summaryItems, tissuesOf } from "./components/summary";
 import { loadConfig, type DashboardConfig } from "./config";
 import { parseTable, toTsv } from "./data/csv";
-import { classifyBucketFile, classifyReleaseFile, detectKind, detectTissue, KIND_LABELS, REQUIRED_KINDS, type InputKind } from "./data/detect";
+import { ALL_TISSUES, classifyBucketFile, classifyReleaseFile, detectKind, detectTissue, KIND_LABELS, REQUIRED_KINDS, type InputKind } from "./data/detect";
 import { bytesToText, fetchGsText, fileToText, listGs, uploadGsText } from "./data/gcs";
 import { buildSolvedTable, type BuildResult, type PipelineInputs } from "./pipeline/solvedTable";
 import { OUTPUT_COLUMNS, type Selection } from "./types";
@@ -221,7 +221,7 @@ export default function App() {
         if (fraserTexts[i]) inputs.fraser[t] = parseTable(fraserTexts[i]);
         if (tpmTexts[i]) inputs.tpm[t] = tpmTexts[i];
       });
-      const complete = tissues.filter((t) => inputs.fraser[t] && inputs.tpm[t]);
+      const complete = tissues.filter((t) => (inputs.fraser[t] || inputs.fraser[ALL_TISSUES]) && inputs.tpm[t]);
       if (!complete.length) {
         throw new Error("Add FRASER2 results and a TPM matrix with the same tissue label for at least one tissue.");
       }

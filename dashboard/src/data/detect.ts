@@ -77,10 +77,13 @@ const TABLE_NAME = /\.(csv|tsv|txt)(\.gz)?$/i;
 
 /** In a release folder every table is a FRASER2 result unless it has a fixed name; the tissue comes from the
  *  file name when it says (muscle_200_samples.csv -> muscle) and is otherwise left for the user to pick. */
+export const ALL_TISSUES = "all";
+
 export function classifyReleaseFile(objectName: string, known: string[] = []): { kind: InputKind; tissue: string | null } | null {
   const base = objectName.split("/").pop() ?? objectName;
   const fixed = FIXED_BUCKET_FILES[base];
   if (fixed) return { kind: fixed, tissue: null };
+  if (base.startsWith("solved_table")) return null;   // tables the page saved back; not an input
   if (!TABLE_NAME.test(base)) return null;
   return { kind: "fraser", tissue: detectTissue(base, known) };
 }

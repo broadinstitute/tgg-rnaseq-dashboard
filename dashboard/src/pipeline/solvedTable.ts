@@ -4,6 +4,7 @@ import { filterSolved, loadGeneMap, loadRnaSamples, solvedIndividuals } from "./
 import { parseTpmMatrix, tpmColumns } from "./tpm";
 import { combineVariants, loadAllVariants, loadPriorityVariants, pairKey, uniquePairs } from "./variants";
 import { DEFAULT_PADJ_CUTOFF, SEP, type BuildStats, type Row, type SolvedRow, type TpmMatrix } from "../types";
+import { ALL_TISSUES } from "../data/detect";
 
 export interface PipelineInputs {
   allVariants: Row[];
@@ -40,6 +41,20 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   const solvedIds = new Set(rna.map((r) => r.wgsSampleId));
   const geneMap = loadGeneMap(inputs.geneMap);
 
+  // A FRASER2 table labelled "all" covers every tissue: its rows are assigned to the tissue of their RNA
+  // sample. A tissue-specific table, when present, takes precedence for that tissue.
+  const fraserByTissue: Record<string, Row[]> = { ...inputs.fraser };
+  const combined = fraserByTissue[ALL_TISSUES];
+  delete fraserByTissue[ALL_TISSUES];
+  if (combined) {
+    const tissueOfRna = new Map(rnaAll.map((r) => [r.sampleId, r.tissue]));
+    for (const t of new Set(rnaAll.map((r) => r.tissue))) {
+      if (fraserByTissue[t]) continue;
+      const subset = combined.filter((row) => tissueOfRna.get(row.sampleID) === t);
+      if (subset.length) fraserByTissue[t] = subset;   // a tissue absent from the run stays omitted
+    }
+  }
+
   // FRASER2 per tissue
   const stats: BuildStats = {
     allVariantPairs: pairsAll.size,
@@ -54,7 +69,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
     rnaTissues: [...new Set(rna.map((r) => r.tissue))].sort(),
     warnings: [],
   };
-  const fraserTissues = Object.keys(inputs.fraser);
+  const fraserTissues = Object.keys(fraserByTissue);
   const tpmTissues = Object.keys(inputs.tpm).filter((t) => inputs.tpm[t]);
   for (const t of new Set([...fraserTissues, ...tpmTissues])) {
     if (!stats.rnaTissues.includes(t)) {
@@ -63,7 +78,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
     if (fraserTissues.includes(t) && !tpmTissues.includes(t)) stats.warnings.push(`Tissue "${t}": FRASER2 given but no TPM matrix; TPM columns stay blank.`);
     if (tpmTissues.includes(t) && !fraserTissues.includes(t)) stats.warnings.push(`Tissue "${t}": TPM matrix given but no FRASER2 results; its rows are omitted.`);
   }
-  const outliers = Object.entries(inputs.fraser).flatMap(([tissue, rows]) => {
+  const outliers = Object.entries(fraserByTissue).flatMap(([tissue, rows]) => {
     const r = loadFraserSignificant(rows, tissue, rnaAll, geneMap, padjCutoff);
     stats.fraser[tissue] = r.stats;
     return r.outliers;

@@ -1,7 +1,7 @@
 /** Mirrors tests/test_solved_table.py so the TypeScript port and the Python pipeline agree. */
 import { describe, expect, it } from "vitest";
 import { parseTable } from "../data/csv";
-import { allSolved, exampleInputs, fibroTpmCsv, fraserHeader, muscleFraserTsv, muscleTpmCsv, rnaMetadataCsv } from "../example/exampleInputs";
+import { allSolved, exampleInputs, fibroFraserTsv, fibroTpmCsv, fraserHeader, muscleFraserTsv, muscleTpmCsv, rnaMetadataCsv } from "../example/exampleInputs";
 import { parseTpmMatrix } from "./tpm";
 import { buildSolvedTable } from "./solvedTable";
 import { OUTPUT_COLUMNS } from "../types";
@@ -106,6 +106,16 @@ TTN,7,8,10,11
     const { rows, stats } = buildSolvedTable({ ...inputs(allSolved), rnaMetadata: parseTable(rnaUpper) });
     expect(new Set(rows.map((r) => r.Tissue))).toEqual(new Set(["muscle", "fibroblasts"]));
     expect(stats.warnings.filter((w) => w.includes("no solved RNA-seq sample"))).toEqual([]);
+  });
+
+  it("splits a FRASER2 table labelled 'all' by each RNA sample's tissue", () => {
+    const combined = parseTable(muscleFraserTsv + fibroFraserTsv.split("\n").slice(1).join("\n"));
+    const { rows, stats } = buildSolvedTable({ ...inputs(allSolved), fraser: { all: combined } });
+    const ref = buildSolvedTable(inputs(allSolved));
+    expect(rows).toEqual(ref.rows);
+    expect(stats.fraser.muscle.significant).toBe(4);
+    expect(stats.fraser.fibroblasts.significant).toBe(1);
+    expect(stats.warnings).toEqual(ref.stats.warnings);
   });
 
   it("fails loudly when FRASER2 uses Ensembl IDs and no gene map is available", () => {
