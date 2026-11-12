@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#435b4d"/>
+  <!-- head: a dot -->
+  <circle cx="32" cy="15" r="5.5" fill="#f2f4ea"/>
+  <!-- body: outlined rounded rectangle, open at the bottom like the mockup -->
+  <path d="M17 54 V30 a5 5 0 0 1 5 -5 H42 a5 5 0 0 1 5 5 V54"
+        fill="none" stroke="#f2f4ea" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- RNA strand inside: three small waves -->
+  <path d="M21 42 C23 36 26 36 28 42 C30 48 33 48 35 42 C37 36 40 36 42 42"
+        fill="none" stroke="#bde9e0" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

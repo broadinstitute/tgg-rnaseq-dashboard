@@ -13,7 +13,11 @@ import { bytesToText, fetchGsText, fileToText, listGs, uploadGsText } from "./da
 import { buildSolvedTable, type BuildResult, type PipelineInputs } from "./pipeline/solvedTable";
 import { OUTPUT_COLUMNS, type Selection } from "./types";
 
-const SOLVED_TABLE_NAME = "solved_table.csv";
+/** File name for a saved table: tissue selection and FRASER2 cutoff are part of it, e.g.
+ *  solved_table_muscle_padj0.05.csv or solved_table_all_tissues_padj0.1.csv */
+function solvedTableName(tissue: string, padjCutoff: number): string {
+  return `solved_table_${tissue || "all_tissues"}_padj${padjCutoff}.csv`;
+}
 
 /** Sort release folders newest first: 11_12_2026 / 2026-11-12 style names parse as dates, others sort by name. */
 function releaseDate(url: string): number {
@@ -233,13 +237,16 @@ export default function App() {
     }
   };
 
-  /** Write the built table (tab-separated, same layout as main.py's output) into the selected release folder. */
+  /** Write the built table (tab-separated, same layout as main.py's output) into the selected release folder.
+   *  Rows follow the page's tissue selection; the file name records the tissue and the FRASER2 cutoff. */
   const saveToRelease = async () => {
     if (!result || !release || !tokenValid) return;
-    const url = `${release.replace(/\/$/, "")}/${SOLVED_TABLE_NAME}`;
+    const name = solvedTableName(tissue, padjCutoff);
+    const url = `${release.replace(/\/$/, "")}/${name}`;
+    const rows = tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows;
     setError(""); setBusy(true); setStatus(`Writing ${url}…`);
     try {
-      await uploadGsText(url, toTsv(OUTPUT_COLUMNS, result.rows), "text/tab-separated-values", session!.accessToken);
+      await uploadGsText(url, toTsv(OUTPUT_COLUMNS, rows), "text/tab-separated-values", session!.accessToken);
       setSaved(url);
       setStatus("");
     } catch (e) {
@@ -287,7 +294,7 @@ export default function App() {
             />
           </label>
           {result && release && tokenValid && (
-            <button onClick={saveToRelease} disabled={busy} title={`Write ${SOLVED_TABLE_NAME} to ${release}`}>
+            <button onClick={saveToRelease} disabled={busy} title={`Write ${solvedTableName(tissue, padjCutoff)} to ${release}`}>
               Save to release
             </button>
           )}
