@@ -1,0 +1,6 @@
+{
+  "googleClientId": "422849809944-nul53qf37pecpvc5uqgp7lnh4h04lpb8.apps.googleusercontent.com",
+  "sharedFolder": "gs://tgg-rnaseq/dashboard/shared/",
+  "releasesFolder": "gs://tgg-rnaseq/dashboard/releases/",
+  "padjCutoff": 0.05
+}
