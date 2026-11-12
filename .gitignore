@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+.vscode/
+.DS_Store
+dashboard/node_modules/
+dashboard/dist/
+
+# Real-looking sample IDs / variants used as examples; keep out of the public repo
+example_data/
