@@ -74,6 +74,15 @@ export const SEP = "; ";
 export const SOLVED_STATUSES = new Set(["Solved", "Partially solved", "Probably solved"]);
 export const DEFAULT_PADJ_CUTOFF = 0.05;
 
+/** Significant FRASER2 junctions per RNA sample in a tissue's run (all genes), for ranking samples. */
+export interface SampleOutlierCount {
+  tissue: string;
+  rnaSampleId: string;
+  wgsSampleId: string | null;
+  solved: boolean;
+  count: number;
+}
+
 /** Counts logged while building, shown to the user so ID-mapping failures are visible. */
 export interface BuildStats {
   allVariantPairs: number;
@@ -81,7 +90,7 @@ export interface BuildStats {
   sharedPairs: number;
   rnaSamples: number;
   solvedRnaSamples: number;
-  fraser: Record<string, { total: number; significant: number; geneMapped: number; wgsMapped: number }>;
+  fraser: Record<string, { total: number; significant: number; geneMapped: number; wgsMapped: number; perSample: Map<string, number> }>;
   rows: number;
   rowsWithOutliers: number;
   /** Distinct solved samples with at least one significant FRASER2 outlier in their solved gene. */

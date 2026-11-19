@@ -58,9 +58,13 @@ function display(c: keyof SolvedRow, v: string | number): React.ReactNode {
 
 const WRAP: Set<keyof SolvedRow> = new Set(["Seqr_variant_consequence", "delta_psi", "p-value"]);
 
-interface Props { rows: SolvedRow[]; tissue: string; selection: Selection | null; onClearSelection: () => void }
+interface Props {
+  rows: SolvedRow[]; tissue: string;
+  selection: Selection | null; onClearSelection: () => void;
+  sample: string | null; onClearSample: () => void;
+}
 
-export default function SolvedTable({ rows, tissue, selection, onClearSelection }: Props) {
+export default function SolvedTable({ rows, tissue, selection, onClearSelection, sample, onClearSample }: Props) {
   const [filter, setFilter] = useState("");
   const [minCount, setMinCount] = useState<Partial<Record<keyof SolvedRow, number>>>({});
   const [outliers, setOutliers] = useState<"" | "zero" | "nonzero">("");
@@ -74,6 +78,7 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection 
       (r) =>
         (!tissue || r.Tissue === tissue) &&
         (!selection || matchesSelection(r, selection)) &&
+        (!sample || r.Sample_ID === sample) &&
         (!statusFilter || r.Solved_status === statusFilter) &&
         (outliers === "" || (outliers === "zero") === (r.FRASER2_sig_outlier_count === 0)) &&
         [...NUMERIC].every((c) => c === "FRASER2_sig_outlier_count" || minCount[c] === undefined || (r[c] as number) >= minCount[c]!) &&
@@ -89,7 +94,7 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection 
     const within = sort && sort.col !== "Sample_ID" ? cmp(sort.col, sort.dir) : cmp("Tissue", 1);
     out.sort((a, b) => bySample(a, b) || within(a, b));
     return out;
-  }, [rows, filter, tissue, selection, statusFilter, minCount, outliers, sort]);
+  }, [rows, filter, tissue, selection, sample, statusFilter, minCount, outliers, sort]);
 
   const download = () => {
     const blob = new Blob([toTsv(OUTPUT_COLUMNS, visible)], { type: "text/tab-separated-values" });
@@ -108,6 +113,12 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection 
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Solved table</h2>
         <div className="row">
+          {sample && (
+            <span className="chip sel">
+              sample {sample}
+              <button className="link" onClick={onClearSample} title="Clear">✕</button>
+            </span>
+          )}
           {selection && (
             <span className="chip sel">
               {selection.cls.replace(/_variant$/, "").replace(/_/g, " ")} · {selection.detected ? "with" : "without"} outlier

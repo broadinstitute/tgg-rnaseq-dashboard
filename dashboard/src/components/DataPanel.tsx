@@ -35,6 +35,10 @@ interface Props {
   busy: boolean;
   tissueSuggestions: string[];
   bundledGeneMap: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+  /** One-line summary shown while collapsed. */
+  summary: string;
 }
 
 const keyOf = (kind: InputKind, tissue: string | null | undefined) => (tissue ? `${kind}:${tissue}` : kind);
@@ -50,7 +54,11 @@ export default function DataPanel(p: Props) {
 
   return (
     <section className="card">
-      <h2>Data</h2>
+      <div className="card-head" style={{ marginBottom: p.collapsed ? 0 : 8 }}>
+        <h2>Data{p.collapsed && <span className="muted small" style={{ fontWeight: 400, marginLeft: 10 }}>{p.summary}</span>}</h2>
+        <button className="quiet" onClick={p.onToggle}>{p.collapsed ? "Show" : "Hide"}</button>
+      </div>
+      {!p.collapsed && <>
 
       {/* shared data: maintained by the scheduled export job */}
       <div className="block">
@@ -162,6 +170,7 @@ export default function DataPanel(p: Props) {
           <div className="readiness ok">✓ Ready to build: {ready.join(", ")}</div>
         );
       })()}
+      </>}
     </section>
   );
 }

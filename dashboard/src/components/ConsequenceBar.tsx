@@ -1,16 +1,12 @@
-import React, { useMemo, useRef, useState } from "react";
-import { composeSvg, downloadPng, downloadSvg } from "../data/exportSvg";
+import { useMemo } from "react";
+import { CHART, ChartCard, niceTicks, useTooltip } from "./chart";
 import type { Selection, SolvedRow } from "../types";
 
 /** Horizontal stacked bars, one panel per tissue on a shared scale: per seqr consequence class, how many
  *  solved variants have a FRASER2 outlier in the solved gene (accent) versus none (grey). Unit is
  *  sample × variant within a tissue; a variant is counted under every class listed for it. */
 
-const ACCENT = "#2a78d6";      // categorical slot 1 (validated)
-const MUTED = "#c9ccd1";       // de-emphasis grey: the "no outlier" context series
-const INK = "#1f2933";
-const INK_2 = "#52606d";
-const GRID = "#e1e0d9";
+const ACCENT = CHART.accent, MUTED = CHART.muted, INK = CHART.ink, INK_2 = CHART.ink2, GRID = CHART.grid;
 
 /** VEP terms from most to least splice-relevant; unknown terms go after these, by count. */
 const ORDER = [
@@ -59,19 +55,6 @@ interface Props {
 const TITLE = "RNA support by variant consequence";
 
 export default function ConsequenceBar({ rows, width = 720, selection, onSelect }: Props) {
-  const card = useRef<HTMLElement>(null);
-  const exportChart = async (format: "svg" | "png") => {
-    const svgs = Array.from(card.current?.querySelectorAll<SVGSVGElement>("svg.panel") ?? []);
-    if (!svgs.length) return;
-    const tissues = panels.map((p) => p.tissue);
-    const name = `rna_support_by_consequence_${tissues.length === 1 ? tissues[0] : "all_tissues"}`;
-    const text = composeSvg(svgs, TITLE, [
-      { color: ACCENT, label: "FRASER2 outlier in solved gene" },
-      { color: MUTED, label: "no outlier" },
-    ]);
-    if (format === "svg") downloadSvg(text, `${name}.svg`);
-    else await downloadPng(text, `${name}.png`);
-  };
   const panels = useMemo(() => {
     const tissues = [...new Set(rows.map((r) => r.Tissue))].sort();
     return tissues.map((t) => ({ tissue: t, data: consequenceCounts(rows.filter((r) => r.Tissue === t)) }));
@@ -80,35 +63,23 @@ export default function ConsequenceBar({ rows, width = 720, selection, onSelect 
   if (!panels.length) return null;
 
   return (
-    <section className="card" ref={card}>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0 }}>{TITLE}</h2>
-        <div className="row">
-          <button onClick={() => exportChart("svg")} title="Vector image, editable in Illustrator / Inkscape">Download SVG</button>
-          <button onClick={() => exportChart("png")} title="Image at 2× resolution">Download PNG</button>
-        </div>
-      </div>
-      <div className="row small" style={{ gap: 18, margin: "8px 0 4px" }}>
-        <span><span className="swatch" style={{ background: ACCENT }} /> FRASER2 outlier in solved gene</span>
-        <span><span className="swatch" style={{ background: MUTED }} /> no outlier</span>
-      </div>
-      <p className="muted small" style={{ margin: "0 0 4px" }}>Click a segment to list those variants in the table.</p>
+    <ChartCard
+      title={TITLE}
+      hint="solved variants per consequence class; click a segment to list those variants in the table"
+      legend={[{ color: ACCENT, label: "FRASER2 outlier in solved gene" }, { color: MUTED, label: "no outlier" }]}
+      fileStem={`rna_support_by_consequence_${panels.length === 1 ? panels[0].tissue : "all_tissues"}`}
+    >
       {panels.map((p) => (
         <Panel key={p.tissue} tissue={p.tissue} data={p.data} max={max} width={width} selection={selection} onSelect={onSelect} />
       ))}
-    </section>
+    </ChartCard>
   );
 }
 
 function Panel({ tissue, data, max, width, selection, onSelect }: {
   tissue: string; data: ClassCount[]; max: number; width: number; selection: Selection | null; onSelect: (s: Selection | null) => void;
 }) {
-  const [hover, setHover] = useState<{ x: number; y: number; lines: string[] } | null>(null);
-  const wrap = useRef<HTMLDivElement>(null);
-  const pos = (e: React.MouseEvent) => {
-    const b = wrap.current?.getBoundingClientRect();
-    return { x: e.clientX - (b?.left ?? 0), y: e.clientY - (b?.top ?? 0) };
-  };
+  const tip = useTooltip();
   const plotW = width - LABEL_W - PAD_RIGHT;
   const x = (v: number) => (v / max) * plotW;
   const height = PAD_TOP + data.length * ROW_H + 8;
@@ -116,7 +87,7 @@ function Panel({ tissue, data, max, width, selection, onSelect }: {
   const fmt = (c: string) => c.replace(/_variant$/, "").replace(/_/g, " ");
 
   return (
-      <div ref={wrap} style={{ position: "relative" }}>
+      <div ref={tip.wrap} style={{ position: "relative" }}>
         <svg className="panel" width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: "100%", height: "auto" }} role="img" aria-label={`${tissue}: solved variants by consequence class, split by FRASER2 outlier in the solved gene`}>
           <text x={0} y={16} fontSize={13} fontWeight={600} fill={INK}>{tissue}</text>
           {/* gridlines + ticks */}
@@ -141,8 +112,8 @@ function Panel({ tissue, data, max, width, selection, onSelect }: {
                 <g
                   key={label}
                   style={{ cursor: "pointer", opacity: dim ? 0.35 : 1 }}
-                  onMouseMove={(e) => setHover({ ...pos(e), lines: [`${fmt(d.cls)}: ${n} ${label} (${Math.round((100 * n) / total)}%)`, ...list] })}
-                  onMouseLeave={() => setHover(null)}
+                  onMouseMove={(e) => tip.show(e, [`${fmt(d.cls)}: ${n} ${label} (${Math.round((100 * n) / total)}%)`, ...list])}
+                  onMouseLeave={tip.hide}
                   onClick={() => onSelect(isSel ? null : { cls: d.cls, detected })}
                 >
                   <rect x={LABEL_W + sx} y={y} width={Math.max(w - (last ? 0 : GAP), 1)} height={BAR_H} fill={fill} rx={last ? 4 : 0}
@@ -165,19 +136,7 @@ function Panel({ tissue, data, max, width, selection, onSelect }: {
           })}
           <line x1={LABEL_W} x2={LABEL_W} y1={PAD_TOP - 6} y2={height - 8} stroke="#c3c2b7" strokeWidth={1} />
         </svg>
-        {hover && (
-          <div className="tooltip" style={{ left: hover.x + 12, top: hover.y - 8 }}>
-            {hover.lines.map((l, i) => <div key={i} className={i ? "tooltip-item" : undefined}>{l}</div>)}
-          </div>
-        )}
+        {tip.element}
       </div>
   );
-}
-
-function niceTicks(max: number): number[] {
-  if (max <= 0) return [0];
-  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000].find((s) => max / s <= 6) ?? Math.ceil(max / 6);
-  const out: number[] = [];
-  for (let t = 0; t <= max; t += step) out.push(t);
-  return out;
 }

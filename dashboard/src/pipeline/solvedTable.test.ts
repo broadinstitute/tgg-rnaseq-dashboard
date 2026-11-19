@@ -61,11 +61,15 @@ describe("buildSolvedTable", () => {
     expect(ttnMus.FRASER2_sig_outlier_count).toBe(0); // DMD outliers, not TTN
 
     expect(stats.allVariantPairs).toBe(4);
-    expect(stats.fraser.muscle).toEqual({ total: 5, significant: 4, geneMapped: 4, wgsMapped: 4 });
+    expect(stats.fraser.muscle).toMatchObject({ total: 5, significant: 4, geneMapped: 4, wgsMapped: 4 });
     expect(stats.priorityVariantPairs).toBe(5);
     expect(stats.sharedPairs).toBe(2);
     expect(stats.rowsWithOutliers).toBe(2);
     expect(stats.samplesWithOutliers).toBe(1); // both outlier rows are ABG05
+    // sample ranking: muscle run has ABG05 (2 sig), MNG01 (1), ABG06_R2 (1); fibroblasts ABG06_R1 (1)
+    const { sampleOutliers } = buildSolvedTable(inputs(allSolved));
+    const muscle = sampleOutliers.filter((s) => s.tissue === "muscle").sort((a, b) => b.count - a.count);
+    expect(muscle.map((s) => [s.rnaSampleId, s.count, s.solved])).toEqual([["ABG05", 2, true], ["MNG01", 1, true], ["ABG06_R2", 1, true]]);
     expect(stats.rnaTissues).toEqual(["fibroblasts", "muscle", "whole_blood"]);
     expect(rows.some((r) => r.Tissue === "whole_blood")).toBe(false); // no FRASER2 for whole_blood
     expect(stats.warnings).toEqual(["Omitted tissues without FRASER2 results: whole_blood."]);

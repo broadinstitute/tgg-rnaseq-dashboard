@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { signIn, signOut, type Session } from "./auth/googleAuth";
 import ConsequenceBar from "./components/ConsequenceBar";
 import DataPanel, { type BucketInput, type LocalInput } from "./components/DataPanel";
+import SampleOutlierRank from "./components/SampleOutlierRank";
 import SolvedTable from "./components/SolvedTable";
 import Stats, { type StatItem } from "./components/Stats";
 import TissueSelect from "./components/TissueSelect";
@@ -50,6 +51,8 @@ export default function App() {
   const [bundledGeneMap, setBundledGeneMap] = useState("");
   const [tissue, setTissue] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [sampleSel, setSampleSel] = useState<string | null>(null);
+  const [dataCollapsed, setDataCollapsed] = useState(false);
   const [saved, setSaved] = useState("");
   /** Inputs of the last build, with TPM matrices parsed, so a cutoff change rebuilds without re-reading. */
   const [lastInputs, setLastInputs] = useState<PipelineInputs | null>(null);
@@ -57,6 +60,7 @@ export default function App() {
   /** Bucket object text keyed by gsUrl@updated, so a rebuild with unchanged inputs downloads nothing. */
   const bucketCache = useRef(new Map<string, string>());
   const select = (s: Selection | null) => { setSelection(s); if (s) tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const selectSample = (s: string | null) => { setSampleSel(s); if (s) tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
   useEffect(() => {
     loadConfig()
@@ -250,6 +254,7 @@ export default function App() {
       await new Promise((r) => setTimeout(r, 0));   // let the status paint before the synchronous build
       setResult(buildSolvedTable(inputs));
       setLastInputs(inputs);
+      setDataCollapsed(true);
       setStatus("");
     } catch (e) {
       setError((e as Error).message);
@@ -304,9 +309,15 @@ export default function App() {
             bucketError={bucketError} onRefresh={() => refreshBucket()}
             localInputs={localInputs} onAddFiles={addFiles} onUpdateLocal={updateLocal} onRemoveLocal={removeLocal}
             busy={busy} tissueSuggestions={knownTissues} bundledGeneMap={!!bundledGeneMap}
+            collapsed={dataCollapsed} onToggle={() => setDataCollapsed((c) => !c)}
+            summary={[
+              release ? `release ${release.replace(/\/$/, "").split("/").pop()}` : "",
+              shared ? `${shared.length} shared files` : "",
+              localInputs.length ? `${localInputs.length} dropped` : "",
+            ].filter(Boolean).join(" · ")}
           />
         )}
-        <div className="row">
+        <div className="row toolbar">
           <button className="primary" onClick={build} disabled={!config || busy}>Build solved table</button>
           <label className="row small muted" title="Significant FRASER2 outliers have padjust below this value. Keep it at or below 0.3.">
             FRASER2 padjust &lt;
@@ -328,8 +339,23 @@ export default function App() {
         {result && result.stats.warnings.map((w, i) => <div key={i} className="warn">{w}</div>)}
         {result && <TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />}
         {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff), ...pipelineStatItems(result)]} />}
-        {result && <div ref={tableRef}><SolvedTable rows={result.rows} tissue={tissue} selection={selection} onClearSelection={() => setSelection(null)} /></div>}
-        {result && <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} selection={selection} onSelect={select} />}
+        {result && (
+          <div ref={tableRef}>
+            <SolvedTable rows={result.rows} tissue={tissue}
+                         selection={selection} onClearSelection={() => setSelection(null)}
+                         sample={sampleSel} onClearSample={() => setSampleSel(null)} />
+          </div>
+        )}
+        {result && (
+          <div className="plots">
+            <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} selection={selection} onSelect={select} />
+            <SampleOutlierRank
+              data={tissue ? result.sampleOutliers.filter((s) => s.tissue === tissue) : result.sampleOutliers}
+              padjCutoff={lastInputs?.padjCutoff ?? padjCutoff}
+              selectedSample={sampleSel} onSelectSample={selectSample}
+            />
+          </div>
+        )}
       </main>
     </>
   );

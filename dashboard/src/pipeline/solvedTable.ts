@@ -3,7 +3,7 @@ import { loadFraserSignificant, fraserKey, summarizeFraser, type FraserSummary }
 import { filterSolved, loadGeneMap, loadRnaSamples, solvedIndividuals } from "./metadata";
 import { parseTpmMatrix, tpmColumns } from "./tpm";
 import { combineVariants, loadAllVariants, loadPriorityVariants, pairKey, uniquePairs } from "./variants";
-import { DEFAULT_PADJ_CUTOFF, SEP, type BuildStats, type Row, type SolvedRow, type TpmMatrix } from "../types";
+import { DEFAULT_PADJ_CUTOFF, SEP, type BuildStats, type Row, type SampleOutlierCount, type SolvedRow, type TpmMatrix } from "../types";
 import { ALL_TISSUES } from "../data/detect";
 
 export interface PipelineInputs {
@@ -22,6 +22,8 @@ export interface PipelineInputs {
 export interface BuildResult {
   rows: SolvedRow[];
   stats: BuildStats;
+  /** Every sample in each tissue's FRASER2 run with its significant-junction count; solved ones flagged. */
+  sampleOutliers: SampleOutlierCount[];
 }
 
 export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
@@ -84,6 +86,16 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
     return r.outliers;
   });
   const fraserSummary = summarizeFraser(outliers);
+
+  // per-sample outlier counts for ranking (every sample in the run, not only solved ones)
+  const rnaById = new Map(rnaAll.map((r) => [r.sampleId, r]));
+  const sampleOutliers: SampleOutlierCount[] = [];
+  for (const [tissue, st] of Object.entries(stats.fraser)) {
+    for (const [rnaSampleId, count] of st.perSample) {
+      const wgs = rnaById.get(rnaSampleId)?.wgsSampleId ?? null;
+      sampleOutliers.push({ tissue, rnaSampleId, wgsSampleId: wgs, solved: !!wgs && solvedIds.has(wgs), count });
+    }
+  }
 
   // TPM per tissue
   const matrices = new Map<string, TpmMatrix>();
@@ -160,5 +172,5 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   stats.rows = rows.length;
   stats.rowsWithOutliers = rows.filter((r) => r.FRASER2_sig_outlier_count > 0).length;
   stats.samplesWithOutliers = new Set(rows.filter((r) => r.FRASER2_sig_outlier_count > 0).map((r) => r.Sample_ID)).size;
-  return { rows, stats };
+  return { rows, stats, sampleOutliers };
 }

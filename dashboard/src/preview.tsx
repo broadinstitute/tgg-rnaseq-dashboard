@@ -78,7 +78,7 @@ function Preview() {
         {error && <div className="error">{error}</div>}
         {rows && <TissueSelect tissues={tissuesOf(rows)} value={tissue} onChange={setTissue} />}
         {rows && <Stats items={summaryItems(rows, tissue)} />}
-        {rows && <div ref={tableRef}><SolvedTable rows={rows} tissue={tissue} selection={selection} onClearSelection={() => setSelection(null)} /></div>}
+        {rows && <div ref={tableRef}><SolvedTable rows={rows} tissue={tissue} selection={selection} onClearSelection={() => setSelection(null)} sample={null} onClearSample={() => {}} /></div>}
         {rows && <ConsequenceBar rows={tissue ? rows.filter((r) => r.Tissue === tissue) : rows} selection={selection} onSelect={select} />}
       </main>
     </div>

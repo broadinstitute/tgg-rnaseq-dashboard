@@ -6,6 +6,8 @@ export interface FraserLoadStats {
   significant: number;
   geneMapped: number;
   wgsMapped: number;
+  /** RNA sample -> number of significant junctions (all genes), for the sample ranking chart. */
+  perSample: Map<string, number>;
 }
 
 /** Significant FRASER2 outliers for one tissue with gene symbol, WGS ID and tissue attached. */
@@ -17,7 +19,7 @@ export function loadFraserSignificant(
   padjCutoff: number,
 ): { outliers: FraserOutlier[]; stats: FraserLoadStats } {
   const rnaToWgs = new Map(rna.map((r) => [r.sampleId, r.wgsSampleId]));
-  const stats: FraserLoadStats = { total: rows.length, significant: 0, geneMapped: 0, wgsMapped: 0 };
+  const stats: FraserLoadStats = { total: rows.length, significant: 0, geneMapped: 0, wgsMapped: 0, perSample: new Map() };
 
   // hgncSymbol may hold ENSG IDs (map through GENCODE) or already be symbols.
   const ensgShare = rows.filter((r) => (r.hgncSymbol ?? "").trim().startsWith("ENSG")).length / Math.max(rows.length, 1);
@@ -34,6 +36,7 @@ export function loadFraserSignificant(
     const padjust = Number(r.padjust);
     if (!(padjust < padjCutoff)) continue; // NaN also fails
     stats.significant++;
+    stats.perSample.set(r.sampleID, (stats.perSample.get(r.sampleID) ?? 0) + 1);
 
     // A junction overlapping several genes carries them joined by ";" (or ","); count it under each.
     const genes = splitGenes(r.hgncSymbol ?? "")
