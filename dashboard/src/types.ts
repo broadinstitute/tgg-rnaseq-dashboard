@@ -43,6 +43,8 @@ export interface SolvedRow {
   Median_TPM_in_tissue_cohort: string;
   delta_psi: string;
   "p-value": string;
+  /** Which restricted gene sets the gene belongs to ("constrained; disease-associated"), or "". */
+  Gene_set: string;
 }
 
 export const OUTPUT_COLUMNS: (keyof SolvedRow)[] = [
@@ -58,6 +60,7 @@ export const OUTPUT_COLUMNS: (keyof SolvedRow)[] = [
   "Median_TPM_in_tissue_cohort",
   "delta_psi",
   "p-value",
+  "Gene_set",
 ];
 
 /** A consequence-chart segment: rows of this class with (or without) a FRASER2 outlier. */
@@ -75,8 +78,14 @@ export const SOLVED_STATUSES = new Set(["Solved", "Partially solved", "Probably 
 /** seqr solve-status values that count as unsolved. */
 export const UNSOLVED_STATUSES = new Set(["Unsolved"]);
 
-export type Cohort = "solved" | "unsolved";
-export const COHORT_STATUSES: Record<Cohort, Set<string>> = { solved: SOLVED_STATUSES, unsolved: UNSOLVED_STATUSES };
+/** solved / unsolved: individuals with seqr-tagged variants (rows = variants).
+ *  untagged: unsolved individuals with no tagged variants (rows = genes with FRASER2 outliers). */
+export type Cohort = "solved" | "unsolved" | "untagged";
+export const COHORT_STATUSES: Record<Cohort, Set<string>> = { solved: SOLVED_STATUSES, unsolved: UNSOLVED_STATUSES, untagged: UNSOLVED_STATUSES };
+/** Columns that have no meaning for the untagged cohort (no seqr variants). */
+export const VARIANT_COLUMNS: (keyof SolvedRow)[] = ["hgvsc", "Seqr_tagged_variants (N>0)", "Seqr_variant_consequence"];
+/** Shown only for the untagged cohort, where the gene-set filter applies. */
+export const GENE_SET_COLUMNS: (keyof SolvedRow)[] = ["Gene_set"];
 export const DEFAULT_PADJ_CUTOFF = 0.05;
 
 /** Significant FRASER2 junctions per RNA sample in a tissue's run (all genes), for ranking samples. */
@@ -96,6 +105,8 @@ export interface BuildStats {
   sharedPairs: number;
   rnaSamples: number;
   solvedRnaSamples: number;
+  /** Per tissue: RNA-seq samples in the metadata, and how many belong to the cohort. */
+  rnaByTissue: Record<string, { total: number; inCohort: number }>;
   fraser: Record<string, { total: number; significant: number; geneMapped: number; wgsMapped: number; perSample: Map<string, number> }>;
   rows: number;
   rowsWithOutliers: number;

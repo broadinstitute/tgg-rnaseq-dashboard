@@ -10,12 +10,13 @@ import TissueSelect from "./components/TissueSelect";
 import { summaryItems, tissuesOf } from "./components/summary";
 import { loadConfig, type DashboardConfig } from "./config";
 import { parseTable, toTsv } from "./data/csv";
-import { ALL_TISSUES, classifyBucketFile, classifyReleaseFile, detectKind, detectTissue, KIND_LABELS, REQUIRED_KINDS, type InputKind } from "./data/detect";
+import { ALL_TISSUES, classifyBucketFile, classifyReleaseFile, detectKind, detectTissue, GENE_SET_KINDS, GENE_SET_LABELS, KIND_LABELS, REQUIRED_KINDS, type InputKind } from "./data/detect";
 import { bytesToText, fetchGsText, fileToText, listGs, uploadGsText } from "./data/gcs";
 import { buildSolvedTable, type BuildResult, type PipelineInputs } from "./pipeline/solvedTable";
 import { parseTpmMatrix } from "./pipeline/tpm";
-import { OUTPUT_COLUMNS, type Cohort, type Selection } from "./types";
+import { GENE_SET_COLUMNS, OUTPUT_COLUMNS, SOLVED_STATUSES, UNSOLVED_STATUSES, VARIANT_COLUMNS, type Cohort, type Selection } from "./types";
 import CohortSwitch from "./components/CohortSwitch";
+import Faq from "./components/Faq";
 
 /** Largest FRASER2 padjust cutoff the dashboard accepts. */
 const MAX_PADJ = 0.3;
@@ -28,7 +29,11 @@ function solvedTableName(cohort: Cohort, tissue: string, padjCutoff: number): st
 
 /** Both cohorts from one set of parsed inputs. */
 function buildBoth(inputs: PipelineInputs): Record<Cohort, BuildResult> {
-  return { solved: buildSolvedTable({ ...inputs, cohort: "solved" }), unsolved: buildSolvedTable({ ...inputs, cohort: "unsolved" }) };
+  return {
+    solved: buildSolvedTable({ ...inputs, cohort: "solved" }),
+    unsolved: buildSolvedTable({ ...inputs, cohort: "unsolved" }),
+    untagged: buildSolvedTable({ ...inputs, cohort: "untagged" }),
+  };
 }
 
 /** Sort release folders newest first: 11_12_2026 / 2026-11-12 style names parse as dates, others sort by name. */
@@ -57,25 +62,61 @@ export default function App() {
   const [results, setResults] = useState<Record<Cohort, BuildResult> | null>(null);
   const [cohort, setCohort] = useState<Cohort>("solved");
   const result = results ? results[cohort] : null;
-  const cohortLabel = cohort;                                   // "solved" | "unsolved"
-  const geneWord = cohort === "solved" ? "solved" : "candidate";
+  const cohortLabel = cohort === "untagged" ? "untagged unsolved" : cohort;
+  const geneWord = cohort === "solved" ? "solved" : cohort === "unsolved" ? "candidate" : "outlier";
+  const untagged = cohort === "untagged";
   const [bundledGeneMap, setBundledGeneMap] = useState("");
+  /** Gene sets shipped with the page (public/*.json), used when neither a dropped file nor the bucket provides them. */
+  const [bundledGeneSets, setBundledGeneSets] = useState<Partial<Record<InputKind, string>>>({});
   const [tissue, setTissue] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sampleSel, setSampleSel] = useState<string | null>(null);
   const [dataCollapsed, setDataCollapsed] = useState(false);
   const [page, setPage] = useState("consequence");
+  // FAQ is its own page, reachable from the header and via #faq
+  const [showFaq, setShowFaq] = useState(() => location.hash === "#faq");
+  const openFaq = (section?: string) => {
+    setShowFaq(true);
+    history.replaceState(null, "", "#faq");
+    // jump to a section once the FAQ has rendered
+    setTimeout(() => (section ? document.getElementById(section)?.scrollIntoView({ block: "start" }) : window.scrollTo({ top: 0 })), 0);
+  };
+  const closeFaq = () => { setShowFaq(false); history.replaceState(null, "", location.pathname + location.search); window.scrollTo({ top: 0 }); };
   const [saved, setSaved] = useState("");
   /** Inputs of the last build, with TPM matrices parsed, so a cutoff change rebuilds without re-reading. */
   const [lastInputs, setLastInputs] = useState<PipelineInputs | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const cohortRef = useRef<HTMLDivElement>(null);
   /** Bucket object text keyed by gsUrl@updated, so a rebuild with unchanged inputs downloads nothing. */
   const bucketCache = useRef(new Map<string, string>());
   // a plot interaction filters the table, which sits above the plot tabs: scroll it into view
   const goTable = () => tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const select = (s: Selection | null) => { setSelection(s); if (s) goTable(); };
-  const selectSample = (s: string | null) => { setSampleSel(s); if (s) goTable(); };
+  /** Why a selected sample has no rows in the current cohort, from its seqr status and tags. */
+  const explainEmpty = (s: string): string => {
+    if (!result) return "";
+    const status = result.seqrStatus.get(s);
+    const where = tissue ? ` in ${tissue}` : "";
+    if (status === undefined) return `No rows for ${s}: it is not in the seqr metadata (no individual ${s}).`;
+    if (!SOLVED_STATUSES.has(status) && !UNSOLVED_STATUSES.has(status)) {
+      return `No rows for ${s}: its seqr status is ${status ? `"${status}"` : "blank"}, which is neither solved nor Unsolved, so it belongs to no cohort.`;
+    }
+    const tagged = result.taggedIds.has(s);
+    if (cohort === "untagged") return tagged ? `No rows for ${s}: it has seqr-tagged variants, so it is in "Unsolved with seqr variants".` : `No rows for ${s}${where}: none of its FRASER2 outliers are in a constrained or disease-associated gene at this cutoff.`;
+    if (!tagged) return `No rows for ${s}: it has no seqr-tagged variants${status && UNSOLVED_STATUSES.has(status) ? `; see "Unsolved with no seqr variants"` : ""}.`;
+    return `No rows for ${s}${where}: its tagged variants fall outside this cohort${tissue ? " or tissue" : ""}.`;
+  };
+
+  /** Open a sample from a plot: switch to the cohort that has its rows (if any), filter the table, scroll up. */
+  const selectSample = (s: string | null) => {
+    if (s && results) {
+      const home = (Object.keys(results) as Cohort[]).find((c) => results[c].rows.some((r) => r.Sample_ID === s));
+      if (home && home !== cohort) { setCohort(home); setSelection(null); setSaved(""); if (home === "untagged") setPage("samples"); }
+    }
+    setSampleSel(s);
+    if (s) goTable();
+  };
 
   useEffect(() => {
     loadConfig()
@@ -85,6 +126,12 @@ export default function App() {
     fetch(`${import.meta.env.BASE_URL}gene_map.csv`)
       .then(async (r) => { if (r.ok) setBundledGeneMap(await bytesToText(await r.arrayBuffer())); })
       .catch(() => {});
+    // restricted gene sets shipped with the page (public/constrained_genes.json, public/gencc_da_genes.json)
+    for (const [kind, file] of [["constrainedGenes", "constrained_genes.json"], ["diseaseGenes", "gencc_da_genes.json"]] as const) {
+      fetch(`${import.meta.env.BASE_URL}${file}`)
+        .then(async (r) => { if (r.ok) { const text = await r.text(); setBundledGeneSets((prev) => ({ ...prev, [kind]: text })); } })
+        .catch(() => {});
+    }
   }, []);
 
   const tokenValid = !!session && session.expiresAt > Date.now();
@@ -182,7 +229,7 @@ export default function App() {
     const added: LocalInput[] = [];
     for (const f of Array.from(files)) {
       const text = await fileToText(f);
-      const kind = detectKind(text);
+      const kind = detectKind(text, f.name);
       added.push({
         id: `${f.name}-${f.size}-${f.lastModified}`,
         fileName: f.name,
@@ -214,6 +261,7 @@ export default function App() {
       return text;
     }
     if (kind === "geneMap") return bundledGeneMap;
+    if (GENE_SET_KINDS.includes(kind)) return bundledGeneSets[kind] ?? "";
     return "";
   };
 
@@ -236,7 +284,7 @@ export default function App() {
         ...(releaseFiles ?? []).filter((b) => b.tissue).map((b) => b.tissue!),
         ...(shared ?? []).filter((b) => b.tissue).map((b) => b.tissue!),
       ])];
-      const fixedKinds = ["seqrMetadata", "rnaMetadata", "allVariants", "priorityVariants", "geneMap"] as InputKind[];
+      const fixedKinds = ["seqrMetadata", "rnaMetadata", "allVariants", "priorityVariants", "geneMap", ...GENE_SET_KINDS] as InputKind[];
       setStatus(`Reading ${fixedKinds.length + 2 * tissues.length} inputs…`);
       const [fixedTexts, fraserTexts, tpmTexts] = await Promise.all([
         Promise.all(fixedKinds.map((k) => readInput(k))),
@@ -253,6 +301,9 @@ export default function App() {
         allVariants: parseTable(texts.allVariants!),
         priorityVariants: parseTable(texts.priorityVariants!),
         geneMap: texts.geneMap ? parseTable(texts.geneMap) : [],
+        geneSets: Object.fromEntries(
+          GENE_SET_KINDS.filter((k) => texts[k]).map((k) => [GENE_SET_LABELS[k], JSON.parse(texts[k]!) as string[]]),
+        ),
         fraser: {},
         tpm: {},
         padjCutoff,
@@ -271,8 +322,8 @@ export default function App() {
       setLastInputs(inputs);
       setDataCollapsed(true);
       setStatus("");
-      // after the data panel collapses, bring the toolbar to the top so the results start right below it
-      setTimeout(() => toolbarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      // after the data panel collapses, bring the cohort tabs to the top so the results start right below them
+      setTimeout(() => (cohortRef.current ?? toolbarRef.current)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } catch (e) {
       setError((e as Error).message);
       setStatus("");
@@ -305,6 +356,10 @@ export default function App() {
     <>
       <header>
         <h1>RNA-seq Dashboard</h1>
+        <div className="nav">
+          <a className={showFaq ? undefined : "active"} onClick={closeFaq}>Dashboard</a>
+          <a className={showFaq ? "active" : undefined} onClick={() => openFaq()}>FAQ</a>
+        </div>
         <div className="row">
           {tokenValid ? (
             <>
@@ -316,7 +371,8 @@ export default function App() {
           )}
         </div>
       </header>
-      <main>
+      {showFaq && <main><Faq onBack={closeFaq} /></main>}
+      <main style={{ display: showFaq ? "none" : undefined }}>
         {error && <div className="error">{error}</div>}
         {config && (
           <DataPanel
@@ -355,19 +411,26 @@ export default function App() {
         </div>
         {result && result.stats.warnings.map((w, i) => <div key={i} className="warn">{w}</div>)}
         {results && result && (
-          <div className="row" style={{ gap: 20 }}>
+          <div className="row" style={{ gap: 20, scrollMarginTop: 12 }} ref={cohortRef}>
             <CohortSwitch
               value={cohort}
-              counts={{ solved: new Set(results.solved.rows.map((r) => r.Sample_ID)).size, unsolved: new Set(results.unsolved.rows.map((r) => r.Sample_ID)).size }}
-              onChange={(c) => { setCohort(c); setSelection(null); setSampleSel(null); setSaved(""); }}
+              counts={{
+                solved: new Set(results.solved.rows.filter((r) => !tissue || r.Tissue === tissue).map((r) => r.Sample_ID)).size,
+                unsolved: new Set(results.unsolved.rows.filter((r) => !tissue || r.Tissue === tissue).map((r) => r.Sample_ID)).size,
+                untagged: new Set(results.untagged.rows.filter((r) => !tissue || r.Tissue === tissue).map((r) => r.Sample_ID)).size,
+              }}
+              onChange={(c) => { setCohort(c); setSelection(null); setSampleSel(null); setSaved(""); if (c === "untagged") setPage("samples"); }}
             />
             <TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />
           </div>
         )}
-        {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff, cohortLabel, geneWord), ...pipelineStatItems(result, cohortLabel)]} />}
+        {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff, cohortLabel, geneWord), ...pipelineStatItems(result, cohortLabel, tissue)]} />}
         {result && (
           <div ref={tableRef}>
-            <SolvedTable rows={result.rows} tissue={tissue}
+            <SolvedTable rows={result.rows} tissue={tissue} hideColumns={untagged ? VARIANT_COLUMNS : GENE_SET_COLUMNS} showStatusFilter={cohort === "solved"}
+                         title={cohort === "solved" ? "Solved" : cohort === "unsolved" ? "Unsolved with seqr variants" : "Unsolved with no seqr variants"}
+                         emptySampleMessage={sampleSel ? explainEmpty(sampleSel) : undefined}
+                         note={untagged ? <>Only FRASER2 outliers in <a className="emph" onClick={() => openFaq("gene-sets")} title="How these genes are selected (FAQ)">CONSTRAINED OR DISEASE-ASSOCIATED GENES</a> are shown.</> : undefined}
                          selection={selection} onClearSelection={() => setSelection(null)}
                          sample={sampleSel} onClearSample={() => setSampleSel(null)} />
           </div>
@@ -376,13 +439,13 @@ export default function App() {
         {result && (
           <Tabs
             tabs={[
-              { id: "consequence", label: "RNA support by consequence" },
+              ...(untagged ? [] : [{ id: "consequence", label: "RNA support by consequence" }]),
               { id: "samples", label: "Outliers per sample" },
             ]}
             active={page} onChange={setPage}
           />
         )}
-        {result && page === "consequence" && (
+        {result && page === "consequence" && !untagged && (
           <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} geneWord={geneWord} selection={selection} onSelect={select} />
         )}
         {result && page === "samples" && (
@@ -398,7 +461,10 @@ export default function App() {
 }
 
 /** Build-time counts that do not depend on the table rows. */
-function pipelineStatItems(result: BuildResult, cohortLabel: string): StatItem[] {
-  const s = result.stats;
-  return [{ value: `${s.solvedRnaSamples} / ${s.rnaSamples}`, label: `RNA-seq samples ${cohortLabel} in seqr` }];
+function pipelineStatItems(result: BuildResult, cohortLabel: string, tissue: string): StatItem[] {
+  const by = result.stats.rnaByTissue;
+  const picked = tissue ? [by[tissue] ?? { total: 0, inCohort: 0 }] : Object.values(by);
+  const total = picked.reduce((n, t) => n + t.total, 0);
+  const inCohort = picked.reduce((n, t) => n + t.inCohort, 0);
+  return [{ value: `${inCohort} / ${total}`, label: `RNA-seq samples ${cohortLabel} in seqr${tissue ? ` (${tissue})` : ""}` }];
 }

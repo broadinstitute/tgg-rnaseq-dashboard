@@ -15,7 +15,7 @@ export const CHART = {
 
 interface CardProps {
   title: string;
-  hint?: string;
+  hint?: React.ReactNode;
   legend: LegendItem[];
   /** Used in the downloaded file name. */
   fileStem: string;

@@ -18,13 +18,14 @@ TTN,frameshift_variant,ENST5:c.5A>G,ABG06,,,2,0
 TNNI1-AS1,intron_variant,ENST1:c.2A>G,ABG05,,,1,0
 `;
 
-export const rnaMetadataCsv = `sample_id,imputed_tissue,wgs_sample_id,junk
-ABG05,muscle,ABG05,1
-MNG01,muscle,MNG01,1
-ABG06_R1,fibroblasts,ABG06,1
-ABG06_R2,muscle,ABG06,1
-OTHER,muscle,OTHER,1
-ABG05_B,whole_blood,ABG05,1
+export const rnaMetadataCsv = `sample_id,imputed_tissue,wgs_sample_id,exclude,junk
+ABG05,muscle,ABG05,,1
+MNG01,muscle,MNG01,,1
+ABG06_R1,fibroblasts,ABG06,,1
+ABG06_R2,muscle,ABG06,,1
+OTHER,muscle,OTHER,,1
+ABG05_B,whole_blood,ABG05,,1
+BAD01,muscle,BAD01,yes,1
 `;
 
 export function seqrMetadataCsv(statuses: Record<string, string>): string {

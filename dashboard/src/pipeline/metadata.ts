@@ -13,7 +13,9 @@ export function individualsWithStatus(rows: Row[], statuses: Set<string>): Map<s
 
 /** RNA-seq metadata (sample_id, imputed_tissue, wgs_sample_id), from Airtable export or a user mapping file. */
 export function loadRnaSamples(rows: Row[]): RnaSample[] {
+  // Airtable rows flagged exclude == "yes" are left out, as in main.py and the other TGG pipelines
   return rows
+    .filter((r) => (r.exclude ?? "").trim().toLowerCase() !== "yes")
     .filter((r) => !isBlank(r.sample_id) && !isBlank(r.wgs_sample_id) && !isBlank(r.imputed_tissue))
     .map((r) => ({ sampleId: r.sample_id, tissue: r.imputed_tissue.trim().toLowerCase(), wgsSampleId: r.wgs_sample_id }));
 }

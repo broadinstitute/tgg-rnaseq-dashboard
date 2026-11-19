@@ -1,7 +1,8 @@
 /** Recognise which pipeline input a file is from its header, so users never label files. */
 
 export type InputKind =
-  | "seqrMetadata" | "rnaMetadata" | "geneMap" | "allVariants" | "priorityVariants" | "fraser" | "tpm";
+  | "seqrMetadata" | "rnaMetadata" | "geneMap" | "allVariants" | "priorityVariants" | "fraser" | "tpm"
+  | "constrainedGenes" | "diseaseGenes";
 
 export const KIND_LABELS: Record<InputKind, string> = {
   seqrMetadata: "seqr metadata",
@@ -11,7 +12,13 @@ export const KIND_LABELS: Record<InputKind, string> = {
   priorityVariants: "seqr priority variants",
   fraser: "FRASER2 results",
   tpm: "TPM matrix",
+  constrainedGenes: "constrained genes",
+  diseaseGenes: "disease-associated genes",
 };
+
+/** Gene-set inputs: JSON arrays of gene symbols; the untagged cohort is restricted to their union. */
+export const GENE_SET_KINDS: InputKind[] = ["constrainedGenes", "diseaseGenes"];
+export const GENE_SET_LABELS: Record<string, string> = { constrainedGenes: "constrained", diseaseGenes: "disease-associated" };
 
 export const REQUIRED_KINDS: InputKind[] = ["seqrMetadata", "rnaMetadata", "allVariants", "priorityVariants"];
 export const PER_TISSUE_KINDS: InputKind[] = ["fraser", "tpm"];
@@ -22,8 +29,15 @@ export function headerColumns(text: string): string[] {
   return firstLine.split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
 }
 
-export function detectKind(text: string): InputKind | null {
+export function detectKind(text: string, fileName = ""): InputKind | null {
   if (text.startsWith("#1.2")) return "tpm"; // RNA-SeQC .gct
+  if (text.trimStart().startsWith("[")) {
+    // JSON array of gene symbols: which set it is comes from the file name
+    const lower = fileName.toLowerCase();
+    if (/constrain/.test(lower)) return "constrainedGenes";
+    if (/gencc|disease|_da_|da_genes/.test(lower)) return "diseaseGenes";
+    return null;
+  }
   const cols = new Set(headerColumns(text));
   const has = (...names: string[]) => names.every((n) => cols.has(n));
 
@@ -59,6 +73,8 @@ const FIXED_BUCKET_FILES: Record<string, InputKind> = {
   "gene_map.csv": "geneMap",
   "all_variants.csv": "allVariants",
   "priority_variants.csv": "priorityVariants",
+  "constrained_genes.json": "constrainedGenes",
+  "gencc_da_genes.json": "diseaseGenes",
 };
 
 /** Recognise a bucket object by the names export_dashboard_inputs.py writes; per-tissue files are open-ended. */

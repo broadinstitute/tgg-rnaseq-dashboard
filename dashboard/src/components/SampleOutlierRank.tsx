@@ -29,7 +29,7 @@ export default function SampleOutlierRank({ data, padjCutoff, cohortLabel, width
   return (
     <ChartCard
       title="Outliers per sample"
-      hint={`Significant junctions per sample at padj < ${padjCutoff}, all genes. Dashed lines mark z = 2 and z = 3 (mean + 2 or 3 SD). Hover for the sample; click a ${cohortLabel} one to open it in the table.`}
+      hint={<>Significant junctions per sample at padj &lt; {padjCutoff}, <strong className="emph">ALL GENES</strong>. Dashed lines mark z = 2 and z = 3 (mean + 2 or 3 SD). Hover for the sample; click any sample to open it in its table.</>}
       legend={[{ color: CHART.accent, label: cohortLabel }, { color: CHART.muted, label: "other" }]}
       fileStem={`outliers_per_sample_${panels.length === 1 ? panels[0].tissue : "all_tissues"}`}
     >
@@ -91,21 +91,22 @@ function Panel({ tissue, samples, max, width, cohortLabel, selectedSample, onSel
               key={s.rnaSampleId} cx={cx} cy={y(s.count)} r={R}
               fill={s.inCohort ? CHART.accent : CHART.muted}
               stroke={isSel ? CHART.ink : CHART.surface} strokeWidth={isSel ? 2 : 1.5}
-              style={{ cursor: s.inCohort ? "pointer" : "default", opacity: selectedSample && !isSel && s.inCohort ? 0.45 : 1 }}
+              style={{ cursor: s.wgsSampleId ? "pointer" : "default", opacity: selectedSample && !isSel && s.inCohort ? 0.45 : 1 }}
             />
           );
         })}
         {/* one full-height hit area per sample so every dot is hoverable regardless of density */}
         {samples.map((s, i) => (
           <rect key={`hit-${s.rnaSampleId}`} x={PAD.left + i * slot} y={PAD.top - R} width={slot} height={PLOT_H + 2 * R} fill="transparent"
-                style={{ cursor: s.inCohort ? "pointer" : "default" }}
+                style={{ cursor: s.wgsSampleId ? "pointer" : "default" }}
                 onMouseMove={(e) => tip.show(e, [
                   `${s.rnaSampleId}${s.wgsSampleId && s.wgsSampleId !== s.rnaSampleId ? ` (${s.wgsSampleId})` : ""}`,
                   `${s.count} significant junctions · rank ${i + 1} of ${n}`,
                   s.inCohort ? cohortLabel : "other",
+                  s.wgsSampleId ? "click to open in the table" : "not in the RNA-seq metadata",
                 ])}
                 onMouseLeave={tip.hide}
-                onClick={() => s.inCohort && s.wgsSampleId && onSelectSample(selectedSample === s.wgsSampleId ? null : s.wgsSampleId)} />
+                onClick={() => s.wgsSampleId && onSelectSample(selectedSample === s.wgsSampleId ? null : s.wgsSampleId)} />
         ))}
         <text x={PAD.left + plotW / 2} y={height - 6} fontSize={11} fill={CHART.ink2} textAnchor="middle">samples, ranked by outlier count</text>
       </svg>

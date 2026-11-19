@@ -7,7 +7,7 @@ export default function Tabs({ tabs, active, onChange }: { tabs: Tab[]; active: 
   useEffect(() => {
     const fromHash = () => {
       const id = location.hash.replace(/^#/, "");
-      if (id && tabs.some((t) => t.id === id) && id !== active) onChange(id);
+      if (id && tabs.some((t) => t.id === id) && id !== active) onChange(id);   // #faq and others are ignored here
     };
     fromHash();
     window.addEventListener("hashchange", fromHash);

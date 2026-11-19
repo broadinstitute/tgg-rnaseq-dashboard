@@ -71,6 +71,7 @@ describe("buildSolvedTable", () => {
     const muscle = sampleOutliers.filter((s) => s.tissue === "muscle").sort((a, b) => b.count - a.count);
     expect(muscle.map((s) => [s.rnaSampleId, s.count, s.inCohort])).toEqual([["ABG05", 2, true], ["MNG01", 1, true], ["ABG06_R2", 1, true]]);
     expect(stats.rnaTissues).toEqual(["fibroblasts", "muscle", "whole_blood"]);
+    expect(stats.rnaSamples).toBe(6);   // BAD01 (exclude = yes) is dropped
     expect(rows.some((r) => r.Tissue === "whole_blood")).toBe(false); // no FRASER2 for whole_blood
     expect(stats.warnings).toEqual(["Omitted tissues without FRASER2 results: whole_blood."]);
   });
@@ -89,6 +90,35 @@ describe("buildSolvedTable", () => {
     expect(rows.every((r) => r.Solved_status === "Unsolved")).toBe(true);
     const muscle = Object.fromEntries(sampleOutliers.filter((s) => s.tissue === "muscle").map((s) => [s.rnaSampleId, s.inCohort]));
     expect(muscle).toEqual({ ABG05: false, MNG01: true, ABG06_R2: true });
+  });
+
+  it("builds the untagged cohort: unsolved individuals without tagged variants, one row per outlier gene", () => {
+    // OTHER is unsolved and has no seqr variants; give it a muscle outlier in TTN (ENSG5)
+    const muscle = parseTable(muscleFraserTsv + "chr1\t11\t12\t+\tOTHER\tENSG5\t0.004\t0.6\t1e-5\n");
+    const statuses = { ABG05: "Solved", MNG01: "Unsolved", ABG06: "Unsolved", OTHER: "Unsolved", ZZZ: "Solved" };
+    const { rows, sampleOutliers } = buildSolvedTable({ ...inputs(statuses), fraser: { muscle, fibroblasts: parseTable(fibroFraserTsv) }, cohort: "untagged" });
+    // MNG01 and ABG06 are unsolved but tagged, so only OTHER qualifies
+    expect(rows.map((r) => [r.Sample_ID, r.Tissue, r.Solved_gene, r.FRASER2_sig_outlier_count, r.delta_psi, r.TPM_in_sample])).toEqual([
+      ["OTHER", "muscle", "TTN", 1, "0.6", "11"],
+    ]);
+    expect(rows[0].hgvsc).toBe("");
+    const muscleFlags = Object.fromEntries(sampleOutliers.filter((s) => s.tissue === "muscle").map((s) => [s.rnaSampleId, s.inCohort]));
+    expect(muscleFlags).toEqual({ ABG05: false, MNG01: false, ABG06_R2: false, OTHER: true });
+  });
+
+  it("restricts the untagged cohort to constrained / disease-associated genes and names the set", () => {
+    const muscle = parseTable(muscleFraserTsv +
+      "chr1\t11\t12\t+\tOTHER\tENSG5\t0.004\t0.6\t1e-5\n" +      // TTN: in both sets
+      "chr1\t13\t14\t+\tOTHER\tENSG1\t0.01\t0.3\t1e-4\n" +       // TNNI1: disease-associated only
+      "chr1\t15\t16\t+\tOTHER\tENSG2\t0.02\t0.2\t1e-3\n");       // SAMD11: in neither -> dropped
+    const statuses = { ABG05: "Solved", MNG01: "Unsolved", ABG06: "Unsolved", OTHER: "Unsolved", ZZZ: "Solved" };
+    const geneSets = { constrained: ["TTN"], "disease-associated": ["TTN", "TNNI1"] };
+    const { rows } = buildSolvedTable({ ...inputs(statuses), fraser: { muscle, fibroblasts: parseTable(fibroFraserTsv) }, geneSets, cohort: "untagged" });
+    expect(rows.map((r) => [r.Solved_gene, r.Gene_set]).sort()).toEqual([["TNNI1", "disease-associated"], ["TTN", "constrained; disease-associated"]]);
+    // other cohorts are not filtered, but still report the set
+    const solved = buildSolvedTable({ ...inputs(allSolved), geneSets });
+    expect(solved.rows.find((r) => r.Solved_gene === "SAMD11")!.Gene_set).toBe("");
+    expect(solved.rows.find((r) => r.hgvsc === "ENST5:c.5A>G")!.Gene_set).toBe("constrained; disease-associated");
   });
 
   it("excludes unsolved individuals", () => {

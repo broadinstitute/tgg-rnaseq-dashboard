@@ -12,6 +12,8 @@ export interface PipelineInputs {
   seqrMetadata: Row[];
   rnaMetadata: Row[];
   geneMap: Row[];
+  /** Restricted gene sets (label -> symbols). The untagged cohort keeps only genes in at least one set. */
+  geneSets?: Record<string, string[]>;
   /** tissue -> FRASER2 results rows (transcriptome-wide). */
   fraser: Record<string, Row[]>;
   /** tissue -> TPM matrix text (genes x samples CSV, or a .gct), or an already parsed matrix. */
@@ -26,6 +28,10 @@ export interface BuildResult {
   stats: BuildStats;
   /** Every sample in each tissue's FRASER2 run with its significant-junction count; solved ones flagged. */
   sampleOutliers: SampleOutlierCount[];
+  /** seqr status of every individual in the metadata (any status), to explain why a sample has no rows. */
+  seqrStatus: Map<string, string>;
+  /** Individuals with at least one seqr-tagged variant. */
+  taggedIds: Set<string>;
 }
 
 export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
@@ -45,6 +51,8 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   const rna = filterSolved(rnaAll, solvedStatus);
   const solvedIds = new Set(rna.map((r) => r.wgsSampleId));
   const geneMap = loadGeneMap(inputs.geneMap);
+  const geneSets = Object.entries(inputs.geneSets ?? {}).map(([label, genes]) => ({ label, genes: new Set(genes) }));
+  const geneSetOf = (gene: string) => geneSets.filter((s) => s.genes.has(gene)).map((s) => s.label).join(SEP);
 
   // A FRASER2 table labelled "all" covers every tissue: its rows are assigned to the tissue of their RNA
   // sample. A tissue-specific table, when present, takes precedence for that tissue.
@@ -67,6 +75,12 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
     sharedPairs: [...pairsAll].filter((k) => pairsPriority.has(k)).length,
     rnaSamples: rnaAll.length,
     solvedRnaSamples: rna.length,
+    rnaByTissue: rnaAll.reduce((acc, r) => {
+      const t = (acc[r.tissue] ??= { total: 0, inCohort: 0 });
+      t.total++;
+      if (solvedIds.has(r.wgsSampleId)) t.inCohort++;
+      return acc;
+    }, {} as Record<string, { total: number; inCohort: number }>),
     fraser: {},
     rows: 0,
     rowsWithOutliers: 0,
@@ -107,6 +121,13 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
     else matrices.set(tissue, m);
   }
 
+  // untagged cohort: unsolved individuals with no seqr-tagged variant at all; their rows come from FRASER2
+  const tagged = new Set(variants.map((v) => v.sample));
+  if (cohort === "untagged") {
+    for (const id of [...solvedIds]) if (tagged.has(id)) solvedIds.delete(id);
+    for (const s of sampleOutliers) s.inCohort = !!s.wgsSampleId && solvedIds.has(s.wgsSampleId);
+  }
+
   // per (sample, gene): the variants and consequences tagged in that gene
   const solved = variants.filter((v) => solvedIds.has(v.sample) && !isBlank(v.gene));
   const perGene = new Map<string, { hgvsc: Set<string>; consequences: Set<string> }>();
@@ -142,6 +163,31 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   // every gene; outlier counts, junction values and consequences are pooled over those genes, and TPM
   // values are given per gene in the same order.
   const rows: SolvedRow[] = [];
+  if (cohort === "untagged") {
+    // one row per (sample, tissue, gene) with a significant outlier, from the FRASER2 summary
+    for (const [key, hit] of fraserSummary) {
+      const [sample, tissue, gene] = key.split("\u0000");
+      if (!solvedIds.has(sample) || !tissuesBySample.get(sample)?.has(tissue)) continue;
+      const geneSet = geneSetOf(gene);
+      if (geneSets.length && !geneSet) continue;   // restricted to constrained / disease-associated genes
+      const tpm = tpmColumns(sample, tissue, gene, rna, matrices);
+      rows.push({
+        Sample_ID: sample,
+        Solved_status: solvedStatus.get(sample) ?? "",
+        Solved_gene: gene,
+        hgvsc: "",
+        Tissue: tissue,
+        FRASER2_sig_outlier_count: hit.count,
+        "Seqr_tagged_variants (N>0)": 0,
+        Seqr_variant_consequence: "",
+        TPM_in_sample: tpm.inSample,
+        Median_TPM_in_tissue_cohort: tpm.cohortMedian,
+        delta_psi: hit.deltaPsi,
+        "p-value": hit.pValue,
+        Gene_set: geneSet,
+      });
+    }
+  }
   for (const { sample, hgvsc, genes } of genesByVariant.values()) {
     const hgvscAll = new Set(genes.flatMap((g) => [...perGene.get(pairKey(sample, g))!.hgvsc]));
     const consequences = new Set(genes.flatMap((g) => [...perGene.get(pairKey(sample, g))!.consequences]));
@@ -161,6 +207,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
         Median_TPM_in_tissue_cohort: tpm.map((t) => t.cohortMedian).filter(Boolean).join(SEP),
         delta_psi: hits.map((h) => h.deltaPsi).join(SEP),
         "p-value": hits.map((h) => h.pValue).join(SEP),
+        Gene_set: genes.map(geneSetOf).filter(Boolean).join(SEP),
       });
     }
   }
@@ -175,5 +222,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   stats.rows = rows.length;
   stats.rowsWithOutliers = rows.filter((r) => r.FRASER2_sig_outlier_count > 0).length;
   stats.samplesWithOutliers = new Set(rows.filter((r) => r.FRASER2_sig_outlier_count > 0).map((r) => r.Sample_ID)).size;
-  return { rows, stats, sampleOutliers };
+  const seqrStatus = new Map<string, string>();
+  for (const r of inputs.seqrMetadata) if (!isBlank(r.individual_id)) seqrStatus.set(r.individual_id, (r.solved_status ?? "").trim());
+  return { rows, stats, sampleOutliers, seqrStatus, taggedIds: tagged };
 }

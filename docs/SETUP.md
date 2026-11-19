@@ -13,6 +13,9 @@ gs://<bucket>/dashboard/
     gene_map.csv              GENCODE ENSG → symbol
     <tissue>_gene_tpm.csv.gz  genes × RNA samples TPM matrix, one per tissue
     all_variants.csv, priority_variants.csv   the two seqr variant exports
+    constrained_genes.json, gencc_da_genes.json   restricted gene sets (JSON arrays of symbols); the
+                              "Unsolved, no tags" table keeps only genes in at least one of them. Also
+                              bundled with the page (dashboard/public/) as a fallback.
   releases/<date>/        FRASER2 result tables uploaded by users; solved_table.csv saved back here
 ```
 

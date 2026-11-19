@@ -18,7 +18,7 @@ import "./styles.css";
 const DEFAULT_FILE = `${__DATA_DIR__}/solved_table.csv`;
 
 function toSolvedRows(rows: Row[]): SolvedRow[] {
-  const missing = OUTPUT_COLUMNS.filter((c) => rows.length && !(c in rows[0]) && c !== "Solved_status");
+  const missing = OUTPUT_COLUMNS.filter((c) => rows.length && !(c in rows[0]) && c !== "Solved_status" && c !== "Gene_set");
   if (missing.length) throw new Error(`Table is missing columns: ${missing.join(", ")}`);
   return rows.map((r) => ({
     Sample_ID: r.Sample_ID,
@@ -33,6 +33,7 @@ function toSolvedRows(rows: Row[]): SolvedRow[] {
     Median_TPM_in_tissue_cohort: r.Median_TPM_in_tissue_cohort ?? "",
     delta_psi: r.delta_psi ?? "",
     "p-value": r["p-value"] ?? "",
+    Gene_set: r.Gene_set ?? "",
   }));
 }
 

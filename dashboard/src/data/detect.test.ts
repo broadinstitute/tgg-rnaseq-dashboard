@@ -12,6 +12,9 @@ describe("detectKind", () => {
     expect(detectKind("gene,ABG05,MNG01\nTNNI1,1,2\n")).toBe("tpm");
     expect(detectKind("#1.2\n5\t1\nName\tDescription\tABG05\n")).toBe("tpm");
     expect(detectKind("foo,bar\n1,2\n")).toBeNull();
+    expect(detectKind('["AAK1", "AAMP"]', "constrained_genes.json")).toBe("constrainedGenes");
+    expect(detectKind('["A4GALT"]', "gencc_da_genes.json")).toBe("diseaseGenes");
+    expect(detectKind('["A4GALT"]', "something.json")).toBeNull();
   });
 
   it("finds the tissue in a file name", () => {

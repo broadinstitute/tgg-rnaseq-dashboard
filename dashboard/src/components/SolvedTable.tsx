@@ -16,13 +16,14 @@ const LABELS: Record<keyof SolvedRow, string> = {
   Median_TPM_in_tissue_cohort: "Median TPM",
   delta_psi: "ΔPSI",
   "p-value": "Padj",
+  Gene_set: "Gene set",
 };
 
 /** Column widths as a share of the table; text-heavy columns get the room, number lists stay compact. */
 const WIDTHS: Record<keyof SolvedRow, number> = {
   Sample_ID: 9, Solved_status: 7, Solved_gene: 8, hgvsc: 15, Tissue: 7,
   FRASER2_sig_outlier_count: 7, "Seqr_tagged_variants (N>0)": 7, Seqr_variant_consequence: 13,
-  TPM_in_sample: 7, Median_TPM_in_tissue_cohort: 7, delta_psi: 7, "p-value": 7,
+  TPM_in_sample: 7, Median_TPM_in_tissue_cohort: 7, delta_psi: 7, "p-value": 7, Gene_set: 10,
 };
 
 const NUMERIC: Set<keyof SolvedRow> = new Set(["FRASER2_sig_outlier_count", "Seqr_tagged_variants (N>0)"]);
@@ -60,11 +61,25 @@ const WRAP: Set<keyof SolvedRow> = new Set(["Seqr_variant_consequence", "delta_p
 
 interface Props {
   rows: SolvedRow[]; tissue: string;
+  /** Columns to leave out (e.g. variant columns for the untagged cohort). */
+  hideColumns?: (keyof SolvedRow)[];
+  /** Show the status dropdown in the header; pointless when every row has the same status. */
+  showStatusFilter?: boolean;
+  /** Card title, e.g. the cohort name. */
+  title?: string;
+  /** Explanation shown when a selected sample has no rows. */
+  emptySampleMessage?: string;
+  /** Note under the title, e.g. what the rows are restricted to. */
+  note?: React.ReactNode;
+  /** Small label after the title naming the table's purpose: validation, prioritization, discovery. */
+  badge?: string;
   selection: Selection | null; onClearSelection: () => void;
   sample: string | null; onClearSample: () => void;
 }
 
-export default function SolvedTable({ rows, tissue, selection, onClearSelection, sample, onClearSample }: Props) {
+export default function SolvedTable({ rows, tissue, hideColumns = [], showStatusFilter = true, title = "Solved table", emptySampleMessage, note, badge, selection, onClearSelection, sample, onClearSample }: Props) {
+  const columns = OUTPUT_COLUMNS.filter((c) => !hideColumns.includes(c));
+  const widthScale = 100 / columns.reduce((n, c) => n + WIDTHS[c], 0);
   const [filter, setFilter] = useState("");
   const [minCount, setMinCount] = useState<Partial<Record<keyof SolvedRow, number>>>({});
   const [outliers, setOutliers] = useState<"" | "zero" | "nonzero">("");
@@ -97,7 +112,7 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection,
   }, [rows, filter, tissue, selection, sample, statusFilter, minCount, outliers, sort]);
 
   const download = () => {
-    const blob = new Blob([toTsv(OUTPUT_COLUMNS, visible)], { type: "text/tab-separated-values" });
+    const blob = new Blob([toTsv(columns, visible)], { type: "text/tab-separated-values" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "solved_table.tsv";
@@ -111,7 +126,10 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection,
   return (
     <section className="card">
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>Solved table</h2>
+        <div>
+          <h2 style={{ margin: 0 }}>{title}{badge && <span className="badge">{badge}</span>}</h2>
+          {note && <div className="muted small">{note}</div>}
+        </div>
         <div className="row">
           {sample && (
             <span className="chip sel">
@@ -137,16 +155,16 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection,
         <table style={{ tableLayout: "fixed" }}>
           <colgroup>
             <col style={{ width: "3%" }} />
-            {OUTPUT_COLUMNS.map((c) => <col key={c} style={{ width: `${WIDTHS[c]}%` }} />)}
+            {columns.map((c) => <col key={c} style={{ width: `${(WIDTHS[c] * widthScale).toFixed(1)}%` }} />)}
           </colgroup>
           <thead>
             <tr>
               <th className="idx" />
-              {OUTPUT_COLUMNS.map((c) => (
+              {columns.map((c) => (
                 <th key={c} onClick={() => toggleSort(c)} title={c} className={NUMERIC.has(c) ? "num" : undefined}>
                   {LABELS[c]}
                   {sort?.col === c && <span className="dir">{sort.dir === 1 ? "▲" : "▼"}</span>}
-                  {c === "Solved_status" && (
+                  {c === "Solved_status" && showStatusFilter && (
                     <select
                       className="header-filter" value={statusFilter} title="Filter by solved status"
                       onClick={(e) => e.stopPropagation()} onChange={(e) => setStatusFilter(e.target.value)}
@@ -186,7 +204,7 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection,
               return (
                 <tr key={i} className={first ? "group-start" : undefined}>
                   <td className="idx">{i + 1}</td>
-                  {OUTPUT_COLUMNS.map((c) => {
+                  {columns.map((c) => {
                     if (c === "Sample_ID" || c === "Solved_status") {
                       return first ? <td key={c} rowSpan={span} className={c === "Sample_ID" ? "group" : "group-status"}>{r[c]}</td> : null;
                     }
@@ -199,6 +217,15 @@ export default function SolvedTable({ rows, tissue, selection, onClearSelection,
                 </tr>
               );
             })}
+            {visible.length === 0 && (
+              <tr>
+                <td colSpan={columns.length + 1} className="muted" style={{ padding: "18px 12px", whiteSpace: "normal" }}>
+                  {sample
+                    ? emptySampleMessage ?? `No rows for sample ${sample} in this cohort${tissue ? ` and tissue (${tissue})` : ""}.`
+                    : "No rows match the current filters."}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

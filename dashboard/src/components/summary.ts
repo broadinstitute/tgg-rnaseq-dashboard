@@ -9,7 +9,7 @@ export function summaryItems(allRows: SolvedRow[], tissue: string, padjCutoff?: 
   const tissues = [...new Set(allRows.map((r) => r.Tissue))].sort();
   const items: StatItem[] = [
     { value: withOutliers.size, label: `${cohortLabel} samples with FRASER2 outliers in the ${geneWord} gene${tissue ? ` (${tissue})` : ""}${padjCutoff !== undefined ? `, padj < ${padjCutoff}` : ""}` },
-    { value: samples.size, label: `${cohortLabel} RNA-seq samples with tagged variants${tissue ? ` (${tissue})` : ""}` },
+    { value: samples.size, label: `${cohortLabel} RNA-seq samples${geneWord === "outlier" ? " with outliers" : " with tagged variants"}${tissue ? ` (${tissue})` : ""}` },
   ];
   if (!tissue) items.push({ value: tissues.length, label: `tissues: ${tissues.join(", ") || "none"}` });
   return items;
