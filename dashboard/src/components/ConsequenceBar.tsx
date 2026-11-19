@@ -54,7 +54,7 @@ interface Props {
 
 const TITLE = "RNA support by variant consequence";
 
-export default function ConsequenceBar({ rows, width = 720, selection, onSelect }: Props) {
+export default function ConsequenceBar({ rows, width = 960, selection, onSelect }: Props) {
   const panels = useMemo(() => {
     const tissues = [...new Set(rows.map((r) => r.Tissue))].sort();
     return tissues.map((t) => ({ tissue: t, data: consequenceCounts(rows.filter((r) => r.Tissue === t)) }));
@@ -65,7 +65,7 @@ export default function ConsequenceBar({ rows, width = 720, selection, onSelect 
   return (
     <ChartCard
       title={TITLE}
-      hint="solved variants per consequence class; click a segment to list those variants in the table"
+      hint="Solved variants by consequence class. Hover for the samples; click a segment to list them in the table."
       legend={[{ color: ACCENT, label: "FRASER2 outlier in solved gene" }, { color: MUTED, label: "no outlier" }]}
       fileStem={`rna_support_by_consequence_${panels.length === 1 ? panels[0].tissue : "all_tissues"}`}
     >

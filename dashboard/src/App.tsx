@@ -4,6 +4,7 @@ import ConsequenceBar from "./components/ConsequenceBar";
 import DataPanel, { type BucketInput, type LocalInput } from "./components/DataPanel";
 import SampleOutlierRank from "./components/SampleOutlierRank";
 import SolvedTable from "./components/SolvedTable";
+import Tabs from "./components/Tabs";
 import Stats, { type StatItem } from "./components/Stats";
 import TissueSelect from "./components/TissueSelect";
 import { summaryItems, tissuesOf } from "./components/summary";
@@ -53,14 +54,18 @@ export default function App() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sampleSel, setSampleSel] = useState<string | null>(null);
   const [dataCollapsed, setDataCollapsed] = useState(false);
+  const [page, setPage] = useState("consequence");
   const [saved, setSaved] = useState("");
   /** Inputs of the last build, with TPM matrices parsed, so a cutoff change rebuilds without re-reading. */
   const [lastInputs, setLastInputs] = useState<PipelineInputs | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   /** Bucket object text keyed by gsUrl@updated, so a rebuild with unchanged inputs downloads nothing. */
   const bucketCache = useRef(new Map<string, string>());
-  const select = (s: Selection | null) => { setSelection(s); if (s) tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
-  const selectSample = (s: string | null) => { setSampleSel(s); if (s) tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  // a plot interaction filters the table, which sits above the plot tabs: scroll it into view
+  const goTable = () => tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const select = (s: Selection | null) => { setSelection(s); if (s) goTable(); };
+  const selectSample = (s: string | null) => { setSampleSel(s); if (s) goTable(); };
 
   useEffect(() => {
     loadConfig()
@@ -256,6 +261,8 @@ export default function App() {
       setLastInputs(inputs);
       setDataCollapsed(true);
       setStatus("");
+      // after the data panel collapses, bring the toolbar to the top so the results start right below it
+      setTimeout(() => toolbarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } catch (e) {
       setError((e as Error).message);
       setStatus("");
@@ -317,7 +324,7 @@ export default function App() {
             ].filter(Boolean).join(" · ")}
           />
         )}
-        <div className="row toolbar">
+        <div className="row toolbar" ref={toolbarRef}>
           <button className="primary" onClick={build} disabled={!config || busy}>Build solved table</button>
           <label className="row small muted" title="Significant FRASER2 outliers have padjust below this value. Keep it at or below 0.3.">
             FRASER2 padjust &lt;
@@ -346,15 +353,25 @@ export default function App() {
                          sample={sampleSel} onClearSample={() => setSampleSel(null)} />
           </div>
         )}
+        {/* plots live in tabs below the table; interacting with a plot filters the table above */}
         {result && (
-          <div className="plots">
-            <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} selection={selection} onSelect={select} />
-            <SampleOutlierRank
-              data={tissue ? result.sampleOutliers.filter((s) => s.tissue === tissue) : result.sampleOutliers}
-              padjCutoff={lastInputs?.padjCutoff ?? padjCutoff}
-              selectedSample={sampleSel} onSelectSample={selectSample}
-            />
-          </div>
+          <Tabs
+            tabs={[
+              { id: "consequence", label: "RNA support by consequence" },
+              { id: "samples", label: "Outliers per sample" },
+            ]}
+            active={page} onChange={setPage}
+          />
+        )}
+        {result && page === "consequence" && (
+          <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} selection={selection} onSelect={select} />
+        )}
+        {result && page === "samples" && (
+          <SampleOutlierRank
+            data={tissue ? result.sampleOutliers.filter((s) => s.tissue === tissue) : result.sampleOutliers}
+            padjCutoff={lastInputs?.padjCutoff ?? padjCutoff}
+            selectedSample={sampleSel} onSelectSample={selectSample}
+          />
         )}
       </main>
     </>

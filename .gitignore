@@ -9,3 +9,6 @@ dashboard/dist/
 
 # Real-looking sample IDs / variants used as examples; keep out of the public repo
 example_data/
+
+# rendered demos (local only)
+dashboard/demo/
