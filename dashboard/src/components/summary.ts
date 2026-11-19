@@ -8,9 +8,10 @@ export function summaryItems(allRows: SolvedRow[], tissue: string, padjCutoff?: 
   const withOutliers = new Set(rows.filter((r) => r.FRASER2_sig_outlier_count > 0).map((r) => r.Sample_ID));
   const tissues = [...new Set(allRows.map((r) => r.Tissue))].sort();
   const items: StatItem[] = [
-    { value: withOutliers.size, label: `${cohortLabel} samples with FRASER2 outliers in the ${geneWord} gene${tissue ? ` (${tissue})` : ""}${padjCutoff !== undefined ? `, padj < ${padjCutoff}` : ""}` },
-    { value: samples.size, label: `${cohortLabel} RNA-seq samples${geneWord === "outlier" ? " with outliers" : " with tagged variants"}${tissue ? ` (${tissue})` : ""}` },
+    { value: withOutliers.size, label: `samples with FRASER2 outliers in the ${geneWord} gene` },
+    { value: samples.size, label: `samples ${geneWord === "outlier" ? "with outliers" : "with tagged variants"}` },
   ];
+  void padjCutoff; void cohortLabel;   // shown in the controls above; kept in the signature for callers
   if (!tissue) items.push({ value: tissues.length, label: `tissues: ${tissues.join(", ") || "none"}` });
   return items;
 }

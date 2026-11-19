@@ -430,10 +430,14 @@ export default function App() {
               }}
               onChange={(c) => { setCohort(c); setSelection(null); setSampleSel(null); setSaved(""); if (c === "untagged") setPage("samples"); }}
             />
-            <TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />
           </div>
         )}
-        {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff, cohortLabel, geneWord), ...pipelineStatItems(result, cohortLabel, tissue)]} />}
+        {result && (
+          <Stats
+            items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff, cohortLabel, geneWord), ...pipelineStatItems(result, cohortLabel, tissue)]}
+            aside={<TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />}
+          />
+        )}
         {result && (
           <div ref={tableRef}>
             <SolvedTable rows={result.rows} tissue={tissue} hideColumns={untagged ? VARIANT_COLUMNS : GENE_SET_COLUMNS} showStatusFilter={cohort === "solved"}
@@ -475,5 +479,5 @@ function pipelineStatItems(result: BuildResult, cohortLabel: string, tissue: str
   const picked = tissue ? [by[tissue] ?? { total: 0, inCohort: 0 }] : Object.values(by);
   const total = picked.reduce((n, t) => n + t.total, 0);
   const inCohort = picked.reduce((n, t) => n + t.inCohort, 0);
-  return [{ value: `${inCohort} / ${total}`, label: `RNA-seq samples ${cohortLabel} in seqr${tissue ? ` (${tissue})` : ""}` }];
+  return [{ value: `${inCohort} / ${total}`, label: `RNA-seq samples ${cohortLabel} in seqr` }];
 }

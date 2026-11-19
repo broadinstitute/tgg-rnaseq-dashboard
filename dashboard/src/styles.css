@@ -43,8 +43,11 @@ input[type="text"], input[type="number"] {
 .inputs .chosen { color: var(--accent); }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .error { color: var(--bad); background: var(--bad-bg); border-radius: 6px; padding: 8px 12px; }
-.stats { display: flex; gap: 24px; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
-.stats li b { display: block; font-size: 18px; font-weight: 600; }
+.stats-strip { padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; padding: 0; list-style: none; }
+.stats li { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.stats li b { font-size: 18px; font-weight: 600; }
+.stats-aside { flex: none; }
 .table-wrap { overflow-y: auto; overflow-x: hidden; max-height: 70vh; border: 1px solid var(--line); border-radius: 6px; }
 table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
