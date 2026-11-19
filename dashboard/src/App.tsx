@@ -27,6 +27,13 @@ function solvedTableName(cohort: Cohort, tissue: string, padjCutoff: number): st
   return `${cohort}_table_${tissue || "all_tissues"}_padj${padjCutoff}.csv`;
 }
 
+/** Tissue selected after a build: the only one if there is one, else the first of this preference order. */
+const TISSUE_PREFERENCE = ["muscle", "fibroblasts", "whole_blood", "whole blood", "blood", "lymphocytes"];
+function defaultTissue(tissues: string[]): string {
+  if (tissues.length <= 1) return tissues[0] ?? "";
+  return TISSUE_PREFERENCE.find((t) => tissues.includes(t)) ?? tissues[0];
+}
+
 /** Both cohorts from one set of parsed inputs. */
 function buildBoth(inputs: PipelineInputs): Record<Cohort, BuildResult> {
   return {
@@ -318,8 +325,10 @@ export default function App() {
       }
       setStatus("Building solved table…");
       await new Promise((r) => setTimeout(r, 0));   // let the status paint before the synchronous build
-      setResults(buildBoth(inputs));
+      const built = buildBoth(inputs);
+      setResults(built);
       setLastInputs(inputs);
+      setTissue(defaultTissue(tissuesOf(built.solved.rows)));
       setDataCollapsed(true);
       setStatus("");
       // after the data panel collapses, bring the cohort tabs to the top so the results start right below them
