@@ -1,9 +1,9 @@
 import { isBlank } from "../data/csv";
 import { loadFraserSignificant, fraserKey, summarizeFraser, type FraserSummary } from "./fraser";
-import { filterSolved, loadGeneMap, loadRnaSamples, solvedIndividuals } from "./metadata";
+import { filterSolved, individualsWithStatus, loadGeneMap, loadRnaSamples } from "./metadata";
 import { parseTpmMatrix, tpmColumns } from "./tpm";
 import { combineVariants, loadAllVariants, loadPriorityVariants, pairKey, uniquePairs } from "./variants";
-import { DEFAULT_PADJ_CUTOFF, SEP, type BuildStats, type Row, type SampleOutlierCount, type SolvedRow, type TpmMatrix } from "../types";
+import { COHORT_STATUSES, DEFAULT_PADJ_CUTOFF, SEP, type BuildStats, type Cohort, type Row, type SampleOutlierCount, type SolvedRow, type TpmMatrix } from "../types";
 import { ALL_TISSUES } from "../data/detect";
 
 export interface PipelineInputs {
@@ -17,6 +17,8 @@ export interface PipelineInputs {
   /** tissue -> TPM matrix text (genes x samples CSV, or a .gct), or an already parsed matrix. */
   tpm: Record<string, string | TpmMatrix>;
   padjCutoff?: number;
+  /** Which individuals get rows: solved (default) or unsolved. */
+  cohort?: Cohort;
 }
 
 export interface BuildResult {
@@ -28,6 +30,7 @@ export interface BuildResult {
 
 export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   const padjCutoff = inputs.padjCutoff ?? DEFAULT_PADJ_CUTOFF;
+  const cohort: Cohort = inputs.cohort ?? "solved";
 
   // seqr variants: union of both tables, one row per (sample, hgvsc, consequence)
   const allV = loadAllVariants(inputs.allVariants);
@@ -38,7 +41,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
 
   // solved RNA-seq samples
   const rnaAll = loadRnaSamples(inputs.rnaMetadata);
-  const solvedStatus = solvedIndividuals(inputs.seqrMetadata);
+  const solvedStatus = individualsWithStatus(inputs.seqrMetadata, COHORT_STATUSES[cohort]);
   const rna = filterSolved(rnaAll, solvedStatus);
   const solvedIds = new Set(rna.map((r) => r.wgsSampleId));
   const geneMap = loadGeneMap(inputs.geneMap);
@@ -93,7 +96,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
   for (const [tissue, st] of Object.entries(stats.fraser)) {
     for (const [rnaSampleId, count] of st.perSample) {
       const wgs = rnaById.get(rnaSampleId)?.wgsSampleId ?? null;
-      sampleOutliers.push({ tissue, rnaSampleId, wgsSampleId: wgs, solved: !!wgs && solvedIds.has(wgs), count });
+      sampleOutliers.push({ tissue, rnaSampleId, wgsSampleId: wgs, inCohort: !!wgs && solvedIds.has(wgs), count });
     }
   }
 

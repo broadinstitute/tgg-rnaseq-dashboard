@@ -69,7 +69,7 @@ describe("buildSolvedTable", () => {
     // sample ranking: muscle run has ABG05 (2 sig), MNG01 (1), ABG06_R2 (1); fibroblasts ABG06_R1 (1)
     const { sampleOutliers } = buildSolvedTable(inputs(allSolved));
     const muscle = sampleOutliers.filter((s) => s.tissue === "muscle").sort((a, b) => b.count - a.count);
-    expect(muscle.map((s) => [s.rnaSampleId, s.count, s.solved])).toEqual([["ABG05", 2, true], ["MNG01", 1, true], ["ABG06_R2", 1, true]]);
+    expect(muscle.map((s) => [s.rnaSampleId, s.count, s.inCohort])).toEqual([["ABG05", 2, true], ["MNG01", 1, true], ["ABG06_R2", 1, true]]);
     expect(stats.rnaTissues).toEqual(["fibroblasts", "muscle", "whole_blood"]);
     expect(rows.some((r) => r.Tissue === "whole_blood")).toBe(false); // no FRASER2 for whole_blood
     expect(stats.warnings).toEqual(["Omitted tissues without FRASER2 results: whole_blood."]);
@@ -80,6 +80,15 @@ describe("buildSolvedTable", () => {
     expect(stats.warnings.some((w) => w.includes('"Muscle" has FRASER2/TPM input but no solved RNA-seq sample'))).toBe(true);
     expect(stats.warnings.some((w) => w.includes('"muscle": TPM matrix given but no FRASER2'))).toBe(true);
     expect(stats.warnings.some((w) => w.includes("Omitted tissues without FRASER2 results: fibroblasts, muscle, whole_blood"))).toBe(true);
+  });
+
+  it("builds the unsolved cohort: only Unsolved individuals get rows, and they are the highlighted samples", () => {
+    const statuses = { ABG05: "Solved", MNG01: "Unsolved", ABG06: "Unsolved", OTHER: "Unsolved", ZZZ: "Solved" };
+    const { rows, sampleOutliers } = buildSolvedTable({ ...inputs(statuses), cohort: "unsolved" });
+    expect(new Set(rows.map((r) => r.Sample_ID))).toEqual(new Set(["MNG01", "ABG06"]));
+    expect(rows.every((r) => r.Solved_status === "Unsolved")).toBe(true);
+    const muscle = Object.fromEntries(sampleOutliers.filter((s) => s.tissue === "muscle").map((s) => [s.rnaSampleId, s.inCohort]));
+    expect(muscle).toEqual({ ABG05: false, MNG01: true, ABG06_R2: true });
   });
 
   it("excludes unsolved individuals", () => {

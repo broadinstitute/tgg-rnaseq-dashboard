@@ -14,15 +14,21 @@ import { ALL_TISSUES, classifyBucketFile, classifyReleaseFile, detectKind, detec
 import { bytesToText, fetchGsText, fileToText, listGs, uploadGsText } from "./data/gcs";
 import { buildSolvedTable, type BuildResult, type PipelineInputs } from "./pipeline/solvedTable";
 import { parseTpmMatrix } from "./pipeline/tpm";
-import { OUTPUT_COLUMNS, type Selection } from "./types";
+import { OUTPUT_COLUMNS, type Cohort, type Selection } from "./types";
+import CohortSwitch from "./components/CohortSwitch";
 
 /** Largest FRASER2 padjust cutoff the dashboard accepts. */
 const MAX_PADJ = 0.3;
 
 /** File name for a saved table: tissue selection and FRASER2 cutoff are part of it, e.g.
  *  solved_table_muscle_padj0.05.csv or solved_table_all_tissues_padj0.1.csv */
-function solvedTableName(tissue: string, padjCutoff: number): string {
-  return `solved_table_${tissue || "all_tissues"}_padj${padjCutoff}.csv`;
+function solvedTableName(cohort: Cohort, tissue: string, padjCutoff: number): string {
+  return `${cohort}_table_${tissue || "all_tissues"}_padj${padjCutoff}.csv`;
+}
+
+/** Both cohorts from one set of parsed inputs. */
+function buildBoth(inputs: PipelineInputs): Record<Cohort, BuildResult> {
+  return { solved: buildSolvedTable({ ...inputs, cohort: "solved" }), unsolved: buildSolvedTable({ ...inputs, cohort: "unsolved" }) };
 }
 
 /** Sort release folders newest first: 11_12_2026 / 2026-11-12 style names parse as dates, others sort by name. */
@@ -48,7 +54,11 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<BuildResult | null>(null);
+  const [results, setResults] = useState<Record<Cohort, BuildResult> | null>(null);
+  const [cohort, setCohort] = useState<Cohort>("solved");
+  const result = results ? results[cohort] : null;
+  const cohortLabel = cohort;                                   // "solved" | "unsolved"
+  const geneWord = cohort === "solved" ? "solved" : "candidate";
   const [bundledGeneMap, setBundledGeneMap] = useState("");
   const [tissue, setTissue] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -86,7 +96,7 @@ export default function App() {
     if (!(padjCutoff > 0 && padjCutoff <= MAX_PADJ)) return;
     const id = setTimeout(() => {
       const inputs = { ...lastInputs, padjCutoff };
-      setResult(buildSolvedTable(inputs));
+      setResults(buildBoth(inputs));
       setLastInputs(inputs);
       setSaved("");
     }, 300);
@@ -165,7 +175,7 @@ export default function App() {
   };
 
   const doSignOut = () => {
-    signOut(session); setSession(null); setShared(null); setReleases([]); setRelease(""); setReleaseFiles(null); setResult(null);
+    signOut(session); setSession(null); setShared(null); setReleases([]); setRelease(""); setReleaseFiles(null); setResults(null);
   };
 
   const addFiles = async (files: FileList | File[]) => {
@@ -209,7 +219,7 @@ export default function App() {
 
   const build = async () => {
     if (!config) return;
-    setError(""); setResult(null); setSaved(""); setLastInputs(null); setBusy(true);
+    setError(""); setResults(null); setSaved(""); setLastInputs(null); setBusy(true);
     try {
       if (!(padjCutoff > 0 && padjCutoff <= MAX_PADJ)) throw new Error(`FRASER2 padjust cutoff must be between 0 and ${MAX_PADJ}.`);
       const unknown = localInputs.filter((l) => !l.kind);
@@ -257,7 +267,7 @@ export default function App() {
       }
       setStatus("Building solved table…");
       await new Promise((r) => setTimeout(r, 0));   // let the status paint before the synchronous build
-      setResult(buildSolvedTable(inputs));
+      setResults(buildBoth(inputs));
       setLastInputs(inputs);
       setDataCollapsed(true);
       setStatus("");
@@ -275,7 +285,7 @@ export default function App() {
    *  Rows follow the page's tissue selection; the file name records the tissue and the FRASER2 cutoff. */
   const saveToRelease = async () => {
     if (!result || !release || !tokenValid) return;
-    const name = solvedTableName(tissue, padjCutoff);
+    const name = solvedTableName(cohort, tissue, padjCutoff);
     const url = `${release.replace(/\/$/, "")}/${name}`;
     const rows = tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows;
     setError(""); setBusy(true); setStatus(`Writing ${url}…`);
@@ -336,7 +346,7 @@ export default function App() {
           </label>
           {padjCutoff > MAX_PADJ && <span className="warn-inline">padjust cutoff must be ≤ {MAX_PADJ}</span>}
           {result && release && tokenValid && (
-            <button onClick={saveToRelease} disabled={busy} title={`Write ${solvedTableName(tissue, padjCutoff)} to ${release}`}>
+            <button onClick={saveToRelease} disabled={busy} title={`Write ${solvedTableName(cohort, tissue, padjCutoff)} to ${release}`}>
               Save to release
             </button>
           )}
@@ -344,8 +354,17 @@ export default function App() {
           {saved && <span className="small" style={{ color: "#006300" }}>✓ saved to {saved}</span>}
         </div>
         {result && result.stats.warnings.map((w, i) => <div key={i} className="warn">{w}</div>)}
-        {result && <TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />}
-        {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff), ...pipelineStatItems(result)]} />}
+        {results && result && (
+          <div className="row" style={{ gap: 20 }}>
+            <CohortSwitch
+              value={cohort}
+              counts={{ solved: new Set(results.solved.rows.map((r) => r.Sample_ID)).size, unsolved: new Set(results.unsolved.rows.map((r) => r.Sample_ID)).size }}
+              onChange={(c) => { setCohort(c); setSelection(null); setSampleSel(null); setSaved(""); }}
+            />
+            <TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />
+          </div>
+        )}
+        {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff, cohortLabel, geneWord), ...pipelineStatItems(result, cohortLabel)]} />}
         {result && (
           <div ref={tableRef}>
             <SolvedTable rows={result.rows} tissue={tissue}
@@ -364,12 +383,12 @@ export default function App() {
           />
         )}
         {result && page === "consequence" && (
-          <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} selection={selection} onSelect={select} />
+          <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} geneWord={geneWord} selection={selection} onSelect={select} />
         )}
         {result && page === "samples" && (
           <SampleOutlierRank
             data={tissue ? result.sampleOutliers.filter((s) => s.tissue === tissue) : result.sampleOutliers}
-            padjCutoff={lastInputs?.padjCutoff ?? padjCutoff}
+            padjCutoff={lastInputs?.padjCutoff ?? padjCutoff} cohortLabel={cohortLabel}
             selectedSample={sampleSel} onSelectSample={selectSample}
           />
         )}
@@ -379,7 +398,7 @@ export default function App() {
 }
 
 /** Build-time counts that do not depend on the table rows. */
-function pipelineStatItems(result: BuildResult): StatItem[] {
+function pipelineStatItems(result: BuildResult, cohortLabel: string): StatItem[] {
   const s = result.stats;
-  return [{ value: `${s.solvedRnaSamples} / ${s.rnaSamples}`, label: "RNA-seq samples solved in seqr" }];
+  return [{ value: `${s.solvedRnaSamples} / ${s.rnaSamples}`, label: `RNA-seq samples ${cohortLabel} in seqr` }];
 }

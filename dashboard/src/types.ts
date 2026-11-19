@@ -72,6 +72,11 @@ export function matchesSelection(r: SolvedRow, sel: Selection): boolean {
 export const SEP = "; ";
 /** seqr solve-status values that count as solved for the dashboard. */
 export const SOLVED_STATUSES = new Set(["Solved", "Partially solved", "Probably solved"]);
+/** seqr solve-status values that count as unsolved. */
+export const UNSOLVED_STATUSES = new Set(["Unsolved"]);
+
+export type Cohort = "solved" | "unsolved";
+export const COHORT_STATUSES: Record<Cohort, Set<string>> = { solved: SOLVED_STATUSES, unsolved: UNSOLVED_STATUSES };
 export const DEFAULT_PADJ_CUTOFF = 0.05;
 
 /** Significant FRASER2 junctions per RNA sample in a tissue's run (all genes), for ranking samples. */
@@ -79,7 +84,8 @@ export interface SampleOutlierCount {
   tissue: string;
   rnaSampleId: string;
   wgsSampleId: string | null;
-  solved: boolean;
+  /** The sample belongs to the cohort being viewed (solved or unsolved). */
+  inCohort: boolean;
   count: number;
 }
 

@@ -1,12 +1,12 @@
 import { isBlank } from "../data/csv";
-import { SOLVED_STATUSES, type RnaSample, type Row } from "../types";
+import { type RnaSample, type Row } from "../types";
 
-/** seqr export (project, individual_id, sex, solved_status) -> individual_id -> status, solved ones only. */
-export function solvedIndividuals(rows: Row[]): Map<string, string> {
+/** seqr export (project, individual_id, sex, solved_status) -> individual_id -> status, for the given statuses. */
+export function individualsWithStatus(rows: Row[], statuses: Set<string>): Map<string, string> {
   const m = new Map<string, string>();
   for (const r of rows) {
     const status = (r.solved_status ?? "").trim();
-    if (SOLVED_STATUSES.has(status) && !isBlank(r.individual_id)) m.set(r.individual_id, status);
+    if (statuses.has(status) && !isBlank(r.individual_id)) m.set(r.individual_id, status);
   }
   return m;
 }

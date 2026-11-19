@@ -48,13 +48,15 @@ const LABEL_W = 230, BAR_H = 20, ROW_H = 30, GAP = 2, PAD_TOP = 34, PAD_RIGHT = 
 interface Props {
   rows: SolvedRow[];
   width?: number;
+  /** "solved" or "candidate": how the gene is described in the legend. */
+  geneWord?: string;
   selection: Selection | null;
   onSelect: (s: Selection | null) => void;
 }
 
 const TITLE = "RNA support by variant consequence";
 
-export default function ConsequenceBar({ rows, width = 960, selection, onSelect }: Props) {
+export default function ConsequenceBar({ rows, width = 960, geneWord = "solved", selection, onSelect }: Props) {
   const panels = useMemo(() => {
     const tissues = [...new Set(rows.map((r) => r.Tissue))].sort();
     return tissues.map((t) => ({ tissue: t, data: consequenceCounts(rows.filter((r) => r.Tissue === t)) }));
@@ -65,8 +67,8 @@ export default function ConsequenceBar({ rows, width = 960, selection, onSelect 
   return (
     <ChartCard
       title={TITLE}
-      hint="Solved variants by consequence class. Hover for the samples; click a segment to list them in the table."
-      legend={[{ color: ACCENT, label: "FRASER2 outlier in solved gene" }, { color: MUTED, label: "no outlier" }]}
+      hint={`Tagged variants by consequence class. Hover for the samples; click a segment to list them in the table.`}
+      legend={[{ color: ACCENT, label: `FRASER2 outlier in ${geneWord} gene` }, { color: MUTED, label: "no outlier" }]}
       fileStem={`rna_support_by_consequence_${panels.length === 1 ? panels[0].tissue : "all_tissues"}`}
     >
       {panels.map((p) => (
