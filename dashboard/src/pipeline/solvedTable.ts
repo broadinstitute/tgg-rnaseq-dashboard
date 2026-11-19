@@ -14,8 +14,8 @@ export interface PipelineInputs {
   geneMap: Row[];
   /** tissue -> FRASER2 results rows (transcriptome-wide). */
   fraser: Record<string, Row[]>;
-  /** tissue -> TPM matrix text (genes x samples CSV, or a .gct). */
-  tpm: Record<string, string>;
+  /** tissue -> TPM matrix text (genes x samples CSV, or a .gct), or an already parsed matrix. */
+  tpm: Record<string, string | TpmMatrix>;
   padjCutoff?: number;
 }
 
@@ -70,7 +70,7 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
     warnings: [],
   };
   const fraserTissues = Object.keys(fraserByTissue);
-  const tpmTissues = Object.keys(inputs.tpm).filter((t) => inputs.tpm[t]);
+  const tpmTissues = Object.keys(inputs.tpm).filter((t) => !!inputs.tpm[t]);
   for (const t of new Set([...fraserTissues, ...tpmTissues])) {
     if (!stats.rnaTissues.includes(t)) {
       stats.warnings.push(`Tissue "${t}" has FRASER2/TPM input but no solved RNA-seq sample has imputed_tissue "${t}" (known: ${stats.rnaTissues.join(", ") || "none"}).`);
@@ -87,7 +87,10 @@ export function buildSolvedTable(inputs: PipelineInputs): BuildResult {
 
   // TPM per tissue
   const matrices = new Map<string, TpmMatrix>();
-  for (const [tissue, text] of Object.entries(inputs.tpm)) if (text) matrices.set(tissue, parseTpmMatrix(text));
+  for (const [tissue, m] of Object.entries(inputs.tpm)) {
+    if (typeof m === "string") { if (m) matrices.set(tissue, parseTpmMatrix(m)); }
+    else matrices.set(tissue, m);
+  }
 
   // per (sample, gene): the variants and consequences tagged in that gene
   const solved = variants.filter((v) => solvedIds.has(v.sample) && !isBlank(v.gene));

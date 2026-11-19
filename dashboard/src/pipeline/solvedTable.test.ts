@@ -118,6 +118,16 @@ TTN,7,8,10,11
     expect(stats.warnings).toEqual(ref.stats.warnings);
   });
 
+  it("honours the padjust cutoff: ABG05 TNNI1 has junctions at 1e-5, 0.01 and 0.5", () => {
+    const count = (padjCutoff: number) =>
+      buildSolvedTable({ ...inputs(allSolved), padjCutoff }).rows
+        .find((r) => r.Sample_ID === "ABG05" && r.hgvsc === "ENST1:c.1A>G")!.FRASER2_sig_outlier_count;
+    expect(count(0.001)).toBe(1);
+    expect(count(0.05)).toBe(2);
+    expect(count(0.3)).toBe(2);
+    expect(count(0.6)).toBe(3);
+  });
+
   it("fails loudly when FRASER2 uses Ensembl IDs and no gene map is available", () => {
     expect(() => buildSolvedTable({ ...inputs(allSolved), geneMap: [] })).toThrow(/no GENCODE gene map/);
   });

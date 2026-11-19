@@ -11,7 +11,11 @@ import { parseTable, toTsv } from "./data/csv";
 import { ALL_TISSUES, classifyBucketFile, classifyReleaseFile, detectKind, detectTissue, KIND_LABELS, REQUIRED_KINDS, type InputKind } from "./data/detect";
 import { bytesToText, fetchGsText, fileToText, listGs, uploadGsText } from "./data/gcs";
 import { buildSolvedTable, type BuildResult, type PipelineInputs } from "./pipeline/solvedTable";
+import { parseTpmMatrix } from "./pipeline/tpm";
 import { OUTPUT_COLUMNS, type Selection } from "./types";
+
+/** Largest FRASER2 padjust cutoff the dashboard accepts. */
+const MAX_PADJ = 0.3;
 
 /** File name for a saved table: tissue selection and FRASER2 cutoff are part of it, e.g.
  *  solved_table_muscle_padj0.05.csv or solved_table_all_tissues_padj0.1.csv */
@@ -47,6 +51,8 @@ export default function App() {
   const [tissue, setTissue] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [saved, setSaved] = useState("");
+  /** Inputs of the last build, with TPM matrices parsed, so a cutoff change rebuilds without re-reading. */
+  const [lastInputs, setLastInputs] = useState<PipelineInputs | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   /** Bucket object text keyed by gsUrl@updated, so a rebuild with unchanged inputs downloads nothing. */
   const bucketCache = useRef(new Map<string, string>());
@@ -63,6 +69,20 @@ export default function App() {
   }, []);
 
   const tokenValid = !!session && session.expiresAt > Date.now();
+
+  // Live cutoff: once a table exists, a change to the FRASER2 padjust threshold rebuilds it from the
+  // inputs already in memory (no bucket reads), after a short pause so typing does not thrash.
+  useEffect(() => {
+    if (!lastInputs || lastInputs.padjCutoff === padjCutoff) return;
+    if (!(padjCutoff > 0 && padjCutoff <= MAX_PADJ)) return;
+    const id = setTimeout(() => {
+      const inputs = { ...lastInputs, padjCutoff };
+      setResult(buildSolvedTable(inputs));
+      setLastInputs(inputs);
+      setSaved("");
+    }, 300);
+    return () => clearTimeout(id);
+  }, [padjCutoff, lastInputs]);
 
   /** Tissue labels seen anywhere, for file-name guessing and autocomplete. */
   const knownTissues = [...new Set([
@@ -180,8 +200,9 @@ export default function App() {
 
   const build = async () => {
     if (!config) return;
-    setError(""); setResult(null); setSaved(""); setBusy(true);
+    setError(""); setResult(null); setSaved(""); setLastInputs(null); setBusy(true);
     try {
+      if (!(padjCutoff > 0 && padjCutoff <= MAX_PADJ)) throw new Error(`FRASER2 padjust cutoff must be between 0 and ${MAX_PADJ}.`);
       const unknown = localInputs.filter((l) => !l.kind);
       if (unknown.length) throw new Error(`Not recognised: ${unknown.map((u) => u.fileName).join(", ")}. Remove them or check their columns.`);
       const noTissue = [
@@ -219,7 +240,7 @@ export default function App() {
       };
       tissues.forEach((t, i) => {
         if (fraserTexts[i]) inputs.fraser[t] = parseTable(fraserTexts[i]);
-        if (tpmTexts[i]) inputs.tpm[t] = tpmTexts[i];
+        if (tpmTexts[i]) inputs.tpm[t] = parseTpmMatrix(tpmTexts[i]);
       });
       const complete = tissues.filter((t) => (inputs.fraser[t] || inputs.fraser[ALL_TISSUES]) && inputs.tpm[t]);
       if (!complete.length) {
@@ -228,6 +249,7 @@ export default function App() {
       setStatus("Building solved table…");
       await new Promise((r) => setTimeout(r, 0));   // let the status paint before the synchronous build
       setResult(buildSolvedTable(inputs));
+      setLastInputs(inputs);
       setStatus("");
     } catch (e) {
       setError((e as Error).message);
@@ -286,13 +308,15 @@ export default function App() {
         )}
         <div className="row">
           <button className="primary" onClick={build} disabled={!config || busy}>Build solved table</button>
-          <label className="row small muted">
+          <label className="row small muted" title="Significant FRASER2 outliers have padjust below this value. Keep it at or below 0.3.">
             FRASER2 padjust &lt;
             <input
-              type="number" step="0.01" min="0" max="1" value={padjCutoff} disabled={busy}
+              type="number" step="0.01" min="0" max={MAX_PADJ} value={padjCutoff} disabled={busy}
               onChange={(e) => setPadjCutoff(Number(e.target.value))} style={{ width: 80 }}
             />
+            <span className="muted small">(≤ {MAX_PADJ}; the table updates as you change it)</span>
           </label>
+          {padjCutoff > MAX_PADJ && <span className="warn-inline">padjust cutoff must be ≤ {MAX_PADJ}</span>}
           {result && release && tokenValid && (
             <button onClick={saveToRelease} disabled={busy} title={`Write ${solvedTableName(tissue, padjCutoff)} to ${release}`}>
               Save to release
@@ -303,7 +327,7 @@ export default function App() {
         </div>
         {result && result.stats.warnings.map((w, i) => <div key={i} className="warn">{w}</div>)}
         {result && <TissueSelect tissues={tissuesOf(result.rows)} value={tissue} onChange={setTissue} />}
-        {result && <Stats items={[...summaryItems(result.rows, tissue), ...pipelineStatItems(result)]} />}
+        {result && <Stats items={[...summaryItems(result.rows, tissue, lastInputs?.padjCutoff), ...pipelineStatItems(result)]} />}
         {result && <div ref={tableRef}><SolvedTable rows={result.rows} tissue={tissue} selection={selection} onClearSelection={() => setSelection(null)} /></div>}
         {result && <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} selection={selection} onSelect={select} />}
       </main>
