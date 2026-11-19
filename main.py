@@ -115,8 +115,12 @@ def load_fraser_significant(tissue, rna_to_wgs):
     df = require_columns(pd.read_csv(path, usecols=lambda c: c in Fraser.USE_COLS), Fraser.USE_COLS, path)
     sig = df[df[Fraser.PADJ] < PADJ_CUTOFF].copy()
 
+    # A junction overlapping several genes carries them joined by ";" (or ","): one row per gene.
+    sig[Fraser.GENE] = sig[Fraser.GENE].astype(str).str.split(r"\s*[;,]\s*")
+    sig = sig.explode(Fraser.GENE)
+    sig = sig[sig[Fraser.GENE].str.strip().ne("") & sig[Fraser.GENE].ne("nan")]
     # hgncSymbol may hold ENSG IDs (map through GENCODE) or already be symbols.
-    if sig[Fraser.GENE].astype(str).str.startswith("ENSG").mean() > 0.5:
+    if sig[Fraser.GENE].str.startswith("ENSG").mean() > 0.5:
         sig[Fraser.GENE] = sig[Fraser.GENE].str.replace(r"\.\d+$", "", regex=True)
         sig = map_gene_id_to_gene_name(sig, Fraser.GENE)
     else:

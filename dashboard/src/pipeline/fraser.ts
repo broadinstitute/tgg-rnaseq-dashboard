@@ -20,7 +20,7 @@ export function loadFraserSignificant(
   const stats: FraserLoadStats = { total: rows.length, significant: 0, geneMapped: 0, wgsMapped: 0 };
 
   // hgncSymbol may hold ENSG IDs (map through GENCODE) or already be symbols.
-  const ensgShare = rows.filter((r) => (r.hgncSymbol ?? "").startsWith("ENSG")).length / Math.max(rows.length, 1);
+  const ensgShare = rows.filter((r) => (r.hgncSymbol ?? "").trim().startsWith("ENSG")).length / Math.max(rows.length, 1);
   const useMap = ensgShare > 0.5;
   if (useMap && geneMap.size === 0) {
     throw new Error(
@@ -35,24 +35,32 @@ export function loadFraserSignificant(
     if (!(padjust < padjCutoff)) continue; // NaN also fails
     stats.significant++;
 
-    const raw = r.hgncSymbol ?? "";
-    const gene = useMap ? geneMap.get(raw.replace(/\.\d+$/, "")) ?? "" : raw;
-    if (!isBlank(gene)) stats.geneMapped++;
+    // A junction overlapping several genes carries them joined by ";" (or ","); count it under each.
+    const genes = splitGenes(r.hgncSymbol ?? "")
+      .map((g) => (useMap ? geneMap.get(g.replace(/\.\d+$/, "")) ?? "" : g))
+      .filter((g) => !isBlank(g));
+    if (genes.length) stats.geneMapped++;
     const wgs = rnaToWgs.get(r.sampleID) ?? "";
     if (!isBlank(wgs)) stats.wgsMapped++;
-    if (isBlank(gene) || isBlank(wgs)) continue;
+    if (!genes.length || isBlank(wgs)) continue;
 
-    outliers.push({
-      rnaSampleId: r.sampleID,
-      wgsSampleId: wgs,
-      tissue,
-      gene,
-      padjust,
-      padjustText: r.padjust,
-      deltaPsiText: r.deltaPsi ?? "",
-    });
+    for (const gene of new Set(genes)) {
+      outliers.push({
+        rnaSampleId: r.sampleID,
+        wgsSampleId: wgs,
+        tissue,
+        gene,
+        padjust,
+        padjustText: r.padjust,
+        deltaPsiText: r.deltaPsi ?? "",
+      });
+    }
   }
   return { outliers, stats };
+}
+
+export function splitGenes(value: string): string[] {
+  return value.split(/[;,]/).map((g) => g.trim()).filter(Boolean);
 }
 
 export interface FraserSummary {

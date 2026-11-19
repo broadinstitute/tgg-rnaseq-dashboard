@@ -92,7 +92,7 @@ def fixtures(tmp_path, monkeypatch):
         ["chr1", 3, 4, "+", "ABG05", "ENSG1", 0.01, 0.4, 1e-4],
         ["chr1", 5, 6, "+", "ABG05", "ENSG1", 0.5, 0.1, 0.1],       # not significant
         ["chr1", 7, 8, "+", "MNG01", "ENSG5", 0.001, 0.3, 1e-6],    # gene without seqr variant
-        ["chr1", 9, 10, "+", "ABG06_R2", "ENSG4", 0.02, -0.5, 1e-3],
+        ["chr1", 9, 10, "+", "ABG06_R2", "ENSG4;ENSG5.3", 0.02, -0.5, 1e-3],   # overlaps DMD and TTN
     ], columns=cols).to_csv(d / "muscle.csv", index=False)
     pd.DataFrame([["chrX", 1, 2, "+", "ABG06_R1", "ENSG4", 0.03, -0.6, 1e-3]], columns=cols).to_csv(d / "fibro.csv", index=False)
 
@@ -171,7 +171,8 @@ def test_solved_table(fixtures, caplog):
     ttn_mus = row.loc[("ABG06", "muscle", "ENST5:c.5A>G")]
     assert ttn_mus["TPM_in_sample"] == "10"
     assert ttn_mus["Median_TPM_in_tissue_cohort"] == "9.0"     # median of 7, 8, 10, 11
-    assert ttn_mus["FRASER2_sig_outlier_count"] == 0           # DMD outliers, not TTN
+    assert ttn_mus["FRASER2_sig_outlier_count"] == 1           # the DMD;TTN junction counts for TTN
+    assert ttn_mus["delta_psi"] == "-0.5"
 
     # Overlap stats were logged.
     assert "shared: 2 unique (sample, hgvsc) pairs" in caplog.text

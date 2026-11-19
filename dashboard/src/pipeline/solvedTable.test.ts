@@ -118,6 +118,15 @@ TTN,7,8,10,11
     expect(stats.warnings).toEqual(ref.stats.warnings);
   });
 
+  it("counts a junction overlapping two genes under each gene", () => {
+    // ABG06_R2 junction annotated to DMD and TTN (ENSG4;ENSG5): TTN is ABG06's solved gene
+    const muscle = parseTable(muscleFraserTsv.replace("ABG06_R2\tENSG4\t", "ABG06_R2\tENSG4;ENSG5.3\t"));
+    const { rows } = buildSolvedTable({ ...inputs(allSolved), fraser: { muscle, fibroblasts: parseTable(fibroFraserTsv) } });
+    const ttn = rows.find((r) => r.Sample_ID === "ABG06" && r.Tissue === "muscle" && r.hgvsc === "ENST5:c.5A>G")!;
+    expect(ttn.FRASER2_sig_outlier_count).toBe(1);
+    expect(ttn.delta_psi).toBe("-0.5");
+  });
+
   it("honours the padjust cutoff: ABG05 TNNI1 has junctions at 1e-5, 0.01 and 0.5", () => {
     const count = (padjCutoff: number) =>
       buildSolvedTable({ ...inputs(allSolved), padjCutoff }).rows
