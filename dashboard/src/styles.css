@@ -114,7 +114,8 @@ th.idx, td.idx { width: 1%; padding-left: 8px; padding-right: 4px; text-align: r
 .chip.sel { background: #e7f0fa; border-color: #b7cfe9; color: var(--ink); }
 .chip.sel button.link { margin-left: 4px; color: var(--ink-2); }
 
-.tissue-select { gap: 10px; font-size: 16px; font-weight: 500; color: var(--ink); }
+.tissue-select { gap: 10px; font-size: 16px; font-weight: 700; color: #d9741a; text-transform: uppercase; letter-spacing: 0.04em; }
+.tissue-select select { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); }
 .tissue-select select { font-size: 16px; padding: 6px 10px; min-width: 180px; }
 
 td.nowrap { white-space: normal; overflow-wrap: anywhere; }
