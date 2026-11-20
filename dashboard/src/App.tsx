@@ -72,6 +72,16 @@ export default function App() {
   const cohortLabel = cohort === "untagged" ? "untagged unsolved" : cohort;
   const geneWord = cohort === "solved" ? "solved" : cohort === "unsolved" ? "candidate" : "outlier";
   const untagged = cohort === "untagged";
+  const plotTabs = [
+    ...(untagged ? [] : [{ id: "consequence", label: "RNA support by consequence" }]),
+    { id: "samples", label: "Outliers per sample" },
+  ];
+  /** Jump to a plot from the table toolbar: select its tab and scroll the tab strip into view. */
+  const openPlot = (id: string) => {
+    setPage(id);
+    history.replaceState(null, "", `#${id}`);
+    setTimeout(() => plotsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
   const [bundledGeneMap, setBundledGeneMap] = useState("");
   /** Gene sets shipped with the page (public/*.json), used when neither a dropped file nor the bucket provides them. */
   const [bundledGeneSets, setBundledGeneSets] = useState<Partial<Record<InputKind, string>>>({});
@@ -95,6 +105,7 @@ export default function App() {
   const tableRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const cohortRef = useRef<HTMLDivElement>(null);
+  const plotsRef = useRef<HTMLDivElement>(null);
   /** Bucket object text keyed by gsUrl@updated, so a rebuild with unchanged inputs downloads nothing. */
   const bucketCache = useRef(new Map<string, string>());
   // a plot interaction filters the table, which sits above the plot tabs: scroll it into view
@@ -442,6 +453,7 @@ export default function App() {
           <div ref={tableRef}>
             <SolvedTable rows={result.rows} tissue={tissue} hideColumns={untagged ? VARIANT_COLUMNS : GENE_SET_COLUMNS} showStatusFilter={cohort === "solved"}
                          title={cohort === "solved" ? "Solved" : cohort === "unsolved" ? "Unsolved with seqr variants" : "Unsolved with no seqr variants"}
+                         plots={plotTabs.map((t) => ({ label: t.label, open: () => openPlot(t.id) }))}
                          emptySampleMessage={sampleSel ? explainEmpty(sampleSel) : undefined}
                          note={untagged ? <>Only FRASER2 outliers in <a className="emph" onClick={() => openFaq("gene-sets")} title="How these genes are selected (FAQ)">CONSTRAINED OR DISEASE-ASSOCIATED GENES</a> are shown.</> : undefined}
                          selection={selection} onClearSelection={() => setSelection(null)}
@@ -450,13 +462,9 @@ export default function App() {
         )}
         {/* plots live in tabs below the table; interacting with a plot filters the table above */}
         {result && (
-          <Tabs
-            tabs={[
-              ...(untagged ? [] : [{ id: "consequence", label: "RNA support by consequence" }]),
-              { id: "samples", label: "Outliers per sample" },
-            ]}
-            active={page} onChange={setPage}
-          />
+          <div ref={plotsRef} style={{ scrollMarginTop: 12 }}>
+            <Tabs tabs={plotTabs} active={page} onChange={setPage} />
+          </div>
         )}
         {result && page === "consequence" && !untagged && (
           <ConsequenceBar rows={tissue ? result.rows.filter((r) => r.Tissue === tissue) : result.rows} geneWord={geneWord} selection={selection} onSelect={select} />

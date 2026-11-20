@@ -9,8 +9,8 @@ const LABELS: Record<keyof SolvedRow, string> = {
   Solved_gene: "Gene",
   hgvsc: "HGVSc",
   Tissue: "Tissue",
-  FRASER2_sig_outlier_count: "# FRASER2 outliers",
-  "Seqr_tagged_variants (N>0)": "# seqr variants",
+  FRASER2_sig_outlier_count: "#\u00a0FRASER2 outliers",
+  "Seqr_tagged_variants (N>0)": "#\u00a0seqr variants",
   Seqr_variant_consequence: "Consequence",
   TPM_in_sample: "TPM",
   Median_TPM_in_tissue_cohort: "Median TPM",
@@ -73,14 +73,17 @@ interface Props {
   note?: React.ReactNode;
   /** Small label after the title naming the table's purpose: validation, prioritization, discovery. */
   badge?: string;
+  /** Plots below the table: name + handler that scrolls to (and opens) that plot. */
+  plots?: { label: string; open: () => void }[];
   selection: Selection | null; onClearSelection: () => void;
   sample: string | null; onClearSample: () => void;
 }
 
-export default function SolvedTable({ rows, tissue, hideColumns = [], showStatusFilter = true, title = "Solved table", emptySampleMessage, note, badge, selection, onClearSelection, sample, onClearSample }: Props) {
+export default function SolvedTable({ rows, tissue, hideColumns = [], showStatusFilter = true, title = "Solved table", emptySampleMessage, note, badge, plots = [], selection, onClearSelection, sample, onClearSample }: Props) {
   const columns = OUTPUT_COLUMNS.filter((c) => !hideColumns.includes(c));
   const widthScale = 100 / columns.reduce((n, c) => n + WIDTHS[c], 0);
   const [filter, setFilter] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [minCount, setMinCount] = useState<Partial<Record<keyof SolvedRow, number>>>({});
   const [outliers, setOutliers] = useState<"" | "zero" | "nonzero">("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -131,6 +134,12 @@ export default function SolvedTable({ rows, tissue, hideColumns = [], showStatus
           {note && <div className="muted small">{note}</div>}
         </div>
         <div className="row">
+          {plots.length > 0 && (
+            <span className="plots-below">
+              <span className="muted small">Visualization</span>
+              {plots.map((p) => <button key={p.label} className="chip-btn" onClick={p.open} title="Jump to this plot below the table">{p.label}</button>)}
+            </span>
+          )}
           {sample && (
             <span className="chip sel">
               sample {sample}
@@ -148,10 +157,11 @@ export default function SolvedTable({ rows, tissue, hideColumns = [], showStatus
             style={{ width: 240 }}
           />
           <span className="muted small">{visible.length} of {rows.length} rows</span>
+          <button onClick={() => setExpanded((e) => !e)} title={expanded ? "Back to the compact height" : "Show the whole table"}>{expanded ? "Collapse" : "Expand"}</button>
           <button onClick={download} disabled={!visible.length}>Download TSV</button>
         </div>
       </div>
-      <div className="table-wrap">
+      <div className={`table-wrap${expanded ? " expanded" : ""}`}>
         <table style={{ tableLayout: "fixed" }}>
           <colgroup>
             <col style={{ width: "3%" }} />

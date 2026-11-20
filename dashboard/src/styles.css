@@ -48,7 +48,14 @@ input[type="text"], input[type="number"] {
 .stats li { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .stats li b { font-size: 18px; font-weight: 600; }
 .stats-aside { flex: none; }
-.table-wrap { overflow-y: auto; overflow-x: hidden; max-height: 70vh; border: 1px solid var(--line); border-radius: 6px; }
+.table-wrap { overflow-y: auto; overflow-x: hidden; max-height: 42vh; border: 1px solid var(--line); border-radius: 6px; }
+.table-wrap.expanded { max-height: none; }
+.plots-below { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
+.chip-btn {
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; color: var(--accent);
+  background: #eaf2f6; border: 1px solid #c9dce6;
+}
+.chip-btn:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
 th { position: sticky; top: 0; background: var(--surface-2); cursor: pointer; user-select: none; font-weight: 600; white-space: normal; max-width: 110px; line-height: 1.25; vertical-align: bottom; }
