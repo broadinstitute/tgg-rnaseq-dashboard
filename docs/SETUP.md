@@ -24,11 +24,11 @@ Both locations are set in `dashboard/public/config.json` (`sharedFolder`, `relea
 ## One-time setup
 
 1. **OAuth client ID** (Google Cloud console → APIs & Services → Credentials): type *Web application*,
-   authorized JavaScript origins `https://broadinstitute.github.io` and `http://localhost:5173`, no
+   authorized JavaScript origins `https://rnaseq-dashboard.broadinstitute.org`, `https://broadinstitute.github.io` and `http://localhost:5173`, no
    redirect URIs. Put the ID in `config.json` as `googleClientId`; it is public by design.
 2. **Bucket CORS** — the browser uses the JSON API:
    ```json
-   [{"origin": ["https://broadinstitute.github.io", "http://localhost:5173"],
+   [{"origin": ["https://rnaseq-dashboard.broadinstitute.org", "https://broadinstitute.github.io", "http://localhost:5173"],
      "method": ["GET", "POST"], "responseHeader": ["Authorization", "Content-Type"], "maxAgeSeconds": 3600}]
    ```
    `gsutil cors set cors.json gs://<bucket>`
