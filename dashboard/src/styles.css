@@ -48,7 +48,7 @@ input[type="text"], input[type="number"] {
 .stats li { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .stats li b { font-size: 18px; font-weight: 600; }
 .stats-aside { flex: none; }
-.table-wrap { overflow-y: auto; overflow-x: hidden; max-height: 42vh; border: 1px solid var(--line); border-radius: 6px; }
+.table-wrap { overflow-y: auto; overflow-x: hidden; max-height: 52vh; border: 1px solid var(--line); border-radius: 6px; }
 .table-wrap.expanded { max-height: none; }
 .plots-below { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
 .chip-btn {
